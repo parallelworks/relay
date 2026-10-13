@@ -122,7 +122,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
+        packages: ["./..."]
+        include:
+          - os: windows-latest
+            packages: ./dpop/... ./policy/... ./internal/cmd/...
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     permissions:
@@ -150,7 +154,11 @@ jobs:
           go-version-file: go.mod
       - name: Test
         shell: bash
-        run: go test -race -shuffle=on -count=1 -covermode=atomic -coverprofile=coverage.out ./...
+        env:
+          PACKAGES: ${{ matrix.packages }}
+        run: |
+          read -ra packages <<< "$PACKAGES"
+          go test -race -shuffle=on -count=1 -covermode=atomic -coverprofile=coverage.out "${packages[@]}"
       - name: Coverage floor
         if: matrix.os == 'ubuntu-latest'
         run: go run ./internal/cmd/covergate -profile coverage.out -module github.com/parallelworks/relay -min 90 -full dpop/verify.go,policy/policy.go

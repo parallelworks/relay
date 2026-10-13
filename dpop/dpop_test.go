@@ -768,3 +768,25 @@ func TestNonceLifetimeBoundary(t *testing.T) {
 		}
 	})
 }
+
+func TestReplayCacheRotatesAtExactBoundaries(t *testing.T) {
+	t.Parallel()
+	start := time.Unix(1_000_000, 0)
+	gen := 10 * time.Second
+
+	c := replayCache{generation: gen, max: 1}
+	if err := c.add("a", start); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.add("b", start.Add(gen)); err != nil {
+		t.Fatalf("a full generation should rotate exactly at its length: %v", err)
+	}
+
+	c = replayCache{generation: gen, max: 1}
+	if err := c.add("a", start); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.add("a", start.Add(2*gen)); err != nil {
+		t.Fatalf("an entry should be forgotten exactly two generations later: %v", err)
+	}
+}

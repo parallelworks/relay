@@ -3,3 +3,4 @@ go get github.com/AdamKorcz/go-118-fuzz-build/testing@v0.0.0-20250520111509-a70c
 compile_native_go_fuzzer github.com/parallelworks/relay/dpop FuzzVerify fuzz_dpop_verify
 compile_native_go_fuzzer github.com/parallelworks/relay/dpop FuzzNormalizeURI fuzz_dpop_normalize_uri
 compile_native_go_fuzzer github.com/parallelworks/relay/policy FuzzParseTarget fuzz_policy_parse_target
+compile_native_go_fuzzer github.com/parallelworks/relay/introspect FuzzIntrospectionResponse fuzz_introspect_response

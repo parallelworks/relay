@@ -48,10 +48,12 @@ jobs:
         run: |
           go mod tidy -diff
           (cd integration && go mod tidy -diff)
+          (cd bench && go mod tidy -diff)
       - name: go mod verify
         run: |
           go mod verify
           (cd integration && go mod verify)
+          (cd bench && go mod verify)
       - name: gofmt
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - name: Threat model tests
@@ -92,6 +94,12 @@ jobs:
         with:
           version: v2.14.0
           working-directory: integration
+          args: --config=../.golangci.yml
+      - name: golangci-lint (bench module)
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.14.0
+          working-directory: bench
           args: --config=../.golangci.yml
 
   workflows:
@@ -136,7 +144,7 @@ jobs:
         packages: ["./..."]
         include:
           - os: windows-latest
-            packages: ./dpop/... ./policy/... ./internal/cmd/...
+            packages: ./client/... ./dpop/... ./policy/... ./internal/cmd/...
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     permissions:
@@ -288,6 +296,65 @@ jobs:
             done
           done
 
+  benchmarks:
+    name: Benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            raw.githubusercontent.com:443
+            proxy.golang.org:443
+            sum.golang.org:443
+            storage.googleapis.com:443
+            *.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          path: head
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          path: base
+          ref: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: head/go.mod
+          cache-dependency-path: |
+            head/go.sum
+            head/bench/go.sum
+      - name: Test the benchmark module
+        working-directory: head/bench
+        run: go test -race -shuffle=on -count=1 ./...
+      - name: Build the base and head benchmarks
+        run: |
+          (cd head/bench && go test -c -o "$RUNNER_TEMP/head.test" .)
+          if [ -f base/bench/go.mod ]; then
+            (cd base/bench && go test -c -o "$RUNNER_TEMP/base.test" .)
+          fi
+      - name: Run base and head interleaved
+        run: |
+          for _ in $(seq 10); do
+            "$RUNNER_TEMP/head.test" -test.run '^$' -test.bench . -test.benchtime 1s -test.benchmem >> "$RUNNER_TEMP/head.txt"
+            if [ -x "$RUNNER_TEMP/base.test" ]; then
+              "$RUNNER_TEMP/base.test" -test.run '^$' -test.bench . -test.benchtime 1s -test.benchmem >> "$RUNNER_TEMP/base.txt"
+            fi
+          done
+      - name: Gate on regressions and the WebSocket baseline
+        working-directory: head/bench
+        run: |
+          set -o pipefail
+          go run ./cmd/gate -base "$RUNNER_TEMP/base.txt" -head "$RUNNER_TEMP/head.txt" | tee -a "$GITHUB_STEP_SUMMARY"
+
   vulnerabilities:
     name: Vulnerabilities
     runs-on: ubuntu-latest
@@ -320,6 +387,7 @@ jobs:
         run: |
           go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" ./...
           (cd integration && go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" ./...)
+          (cd bench && go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" ./...)
       - name: govulncheck (binary)
         env:
           GOFIPS140: certified
@@ -331,7 +399,7 @@ jobs:
   ci-ok:
     name: CI OK
     if: always()
-    needs: [module, lint, workflows, test, fips, integration, fuzz, vulnerabilities]
+    needs: [module, lint, workflows, test, fips, integration, fuzz, benchmarks, vulnerabilities]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     permissions: {}

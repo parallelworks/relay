@@ -1,7 +1,7 @@
 version: 2
 updates:
   - package-ecosystem: gomod
-    directories: [/, /integration]
+    directories: [/, /integration, /bench]
     schedule:
       interval: weekly
     cooldown:

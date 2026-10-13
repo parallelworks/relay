@@ -547,8 +547,8 @@ func (slowIntrospector) AccessToken(ctx context.Context, _ string) (introspect.T
 func TestIntrospectionTimeout(t *testing.T) {
 	t.Parallel()
 	e := relaytest.Start(t, &relaytest.Options{
-		Introspector: slowIntrospector{},
-		Limits:       server.Limits{IntrospectionTimeout: 50 * time.Millisecond},
+		WrapIntrospector: func(server.Introspector) server.Introspector { return slowIntrospector{} },
+		Limits:           server.Limits{IntrospectionTimeout: 50 * time.Millisecond},
 	})
 	resp, conn := e.Connect(t.Context(), t, e.Echo.String(), "token", false)
 	expectStatus(t, resp, conn, http.StatusServiceUnavailable)

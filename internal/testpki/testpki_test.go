@@ -75,3 +75,15 @@ func TestLeafPEMIsAKeyPair(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestCertPEMMatchesPool(t *testing.T) {
+	t.Parallel()
+	ca := New(t)
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(ca.CertPEM()) {
+		t.Fatal("CertPEM did not parse")
+	}
+	if !pool.Equal(ca.Pool()) {
+		t.Fatal("CertPEM differs from the pool")
+	}
+}

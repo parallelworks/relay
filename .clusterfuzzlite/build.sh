@@ -4,3 +4,4 @@ compile_native_go_fuzzer github.com/parallelworks/relay/dpop FuzzVerify fuzz_dpo
 compile_native_go_fuzzer github.com/parallelworks/relay/dpop FuzzNormalizeURI fuzz_dpop_normalize_uri
 compile_native_go_fuzzer github.com/parallelworks/relay/policy FuzzParseTarget fuzz_policy_parse_target
 compile_native_go_fuzzer github.com/parallelworks/relay/introspect FuzzIntrospectionResponse fuzz_introspect_response
+compile_native_go_fuzzer github.com/parallelworks/relay/server FuzzConnectRequest fuzz_server_connect_request

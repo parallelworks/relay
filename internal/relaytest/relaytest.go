@@ -43,8 +43,8 @@ type Options struct {
 	SessionInterval  time.Duration
 	SessionGrace     time.Duration
 	Observer         server.Observer
-	// Introspector replaces the introspection client the relay uses for access tokens.
-	Introspector server.Introspector
+	// WrapIntrospector wraps the introspection client the relay uses for access tokens.
+	WrapIntrospector func(server.Introspector) server.Introspector
 }
 
 // Env is a running relay with its authorization server, echo target and client key.
@@ -119,8 +119,8 @@ func Start(t testing.TB, opts *Options) *Env {
 	must(t, err)
 	e.Sessions = session.NewRegistry(ic, session.Options{Interval: opts.SessionInterval, Grace: opts.SessionGrace})
 	var intro server.Introspector = ic
-	if opts.Introspector != nil {
-		intro = opts.Introspector
+	if opts.WrapIntrospector != nil {
+		intro = opts.WrapIntrospector(ic)
 	}
 	e.Server, err = server.New(&server.Config{
 		Verifier:       dpop.NewVerifier(dpop.Options{Nonces: nonces, MaxReplayEntries: opts.MaxReplayEntries}),

@@ -59,6 +59,11 @@ func serial(t testing.TB) *big.Int {
 	return n
 }
 
+// CertPEM returns the CA certificate PEM encoded.
+func (ca *CA) CertPEM() []byte {
+	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: ca.cert.Raw})
+}
+
 // Pool returns a pool trusting only this CA.
 func (ca *CA) Pool() *x509.CertPool {
 	return ca.pool

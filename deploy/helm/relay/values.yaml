@@ -86,5 +86,6 @@ podAnnotations: {}
 podLabels: {}
 nodeSelector: {}
 tolerations: []
+# Empty spreads replicas across nodes.
 affinity: {}
 topologySpreadConstraints: []

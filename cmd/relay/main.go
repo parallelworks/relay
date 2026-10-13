@@ -52,6 +52,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, ready fun
 	flags.SetOutput(stderr)
 	configPath := flags.String("config", "/etc/relay/config.json", "configuration file")
 	showVersion := flags.Bool("version", false, "print the version and FIPS 140-3 status, then exit")
+	registerOnly := flags.Bool("register", false, "register with the authorization server if needed, print the client_id, then exit")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -71,6 +72,9 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, ready fun
 	if err != nil {
 		return err
 	}
+	if *registerOnly {
+		return register(ctx, cfg, stdout)
+	}
 	logger := slog.New(telemetry.NewLogHandler(stderr, cfg.LogLevel))
 	mp, shutdown, err := telemetry.Setup(ctx, version())
 	if err != nil {
@@ -86,21 +90,42 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, ready fun
 	return errors.Join(err, shutdown(flushCtx))
 }
 
-func serve(ctx context.Context, cfg *Config, logger *slog.Logger, observer server.Observer, ready func(net.Addr)) (err error) {
+// connect discovers the authorization server and loads or registers the relay's credentials.
+func connect(ctx context.Context, cfg *Config) (*http.Client, introspect.Metadata, introspect.Credentials, error) {
 	roots, err := issuerRoots(cfg.IssuerCAFile)
 	if err != nil {
-		return err
+		return nil, introspect.Metadata{}, introspect.Credentials{}, err
 	}
 	hc := introspect.NewHTTPClient(roots)
-	defer hc.CloseIdleConnections()
 	meta, err := introspect.Discover(ctx, hc, cfg.Issuer)
 	if err != nil {
-		return err
+		hc.CloseIdleConnections()
+		return nil, introspect.Metadata{}, introspect.Credentials{}, err
 	}
 	creds, err := credentials(ctx, cfg, hc, &meta)
 	if err != nil {
+		hc.CloseIdleConnections()
+		return nil, introspect.Metadata{}, introspect.Credentials{}, err
+	}
+	return hc, meta, creds, nil
+}
+
+func register(ctx context.Context, cfg *Config, stdout io.Writer) error {
+	hc, _, creds, err := connect(ctx, cfg)
+	if err != nil {
 		return err
 	}
+	hc.CloseIdleConnections()
+	_, err = fmt.Fprintf(stdout, "client_id %s\n", creds.ClientID)
+	return err
+}
+
+func serve(ctx context.Context, cfg *Config, logger *slog.Logger, observer server.Observer, ready func(net.Addr)) (err error) {
+	hc, meta, creds, err := connect(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	defer hc.CloseIdleConnections()
 	ic, err := introspect.NewClient(meta, creds, hc)
 	if err != nil {
 		return err

@@ -230,6 +230,28 @@ func TestRunRegistersAndServes(t *testing.T) {
 	}
 }
 
+func TestRegisterOnly(t *testing.T) {
+	t.Parallel()
+	s := newSetup(t)
+	path := s.writeConfig(t)
+	for range 2 {
+		var out bytes.Buffer
+		if err := run(t.Context(), []string{"-register", "-config", path}, &out, io.Discard, nil); err != nil {
+			t.Fatal(err)
+		}
+		if want := "client_id " + s.clientID(t) + "\n"; out.String() != want {
+			t.Fatalf("output %q, want %q", out.String(), want)
+		}
+	}
+	if n := len(s.as.Registrations()); n != 1 {
+		t.Fatalf("%d registrations", n)
+	}
+	s.config["issuer_ca_file"] = filepath.Join(s.dir, "none.pem")
+	if err := run(t.Context(), []string{"-register", "-config", s.writeConfig(t)}, io.Discard, io.Discard, nil); err == nil {
+		t.Fatal("register succeeded without the CA file")
+	}
+}
+
 func TestRunWithSharedNonceKey(t *testing.T) {
 	t.Parallel()
 	s := newSetup(t)

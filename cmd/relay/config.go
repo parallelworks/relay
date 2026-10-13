@@ -93,6 +93,7 @@ type Limits struct {
 	IntrospectionTimeout Duration `json:"introspection_timeout"`
 	ReadHeaderTimeout    Duration `json:"read_header_timeout"`
 	IdleTimeout          Duration `json:"idle_timeout"`
+	MaxTunnelLifetime    Duration `json:"max_tunnel_lifetime"`
 }
 
 func decodeConfig(data []byte) (*Config, error) {

@@ -52,7 +52,7 @@ GOFIPS140=certified CGO_ENABLED=0 go build -trimpath ./cmd/relay
 | `egress` | Prefixes the relay may dial, and special-purpose addresses inside them that it may dial anyway (SPEC.md, Egress policy). |
 | `dpop_nonces` | Present to require DPoP nonces. `lifetime` (default `5m`) and `key_file`, a key of at least 32 bytes shared by every replica. |
 | `session` | Re-introspection `interval` and `grace`. |
-| `limits` | `max_tunnels`, `max_tunnels_per_source`, `max_conns_per_source`, `failed_auth_per_minute`, `dial_timeout`, `introspection_timeout`, `read_header_timeout`, `idle_timeout`. |
+| `limits` | `max_tunnels`, `max_tunnels_per_source`, `max_conns_per_source`, `failed_auth_per_minute`, `dial_timeout`, `introspection_timeout`, `read_header_timeout`, `idle_timeout`, `max_tunnel_lifetime` (default `24h`). |
 | `shutdown_timeout` | How long `SIGTERM` waits for open tunnels before closing them. Default `30s`. |
 | `log_level` | `DEBUG`, `INFO`, `WARN` or `ERROR`. Logs are JSON on standard error. |
 

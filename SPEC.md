@@ -162,6 +162,8 @@ While a tunnel is open, the relay introspects its `relay_session` every `reintro
 
 Closing sends a TLS `close_notify` to the client over HTTP/1.1, or resets the HTTP/2 stream with `RST_STREAM`, and closes the target connection.
 
+A relay also closes a tunnel that moves no byte for its idle timeout (default 1 hour) or reaches its maximum lifetime (default 24 hours), the same way.
+
 ## Egress policy
 
 The relay dials only addresses inside the configured prefixes. These addresses are refused even when a configured prefix contains them, unless the exact address is listed separately:

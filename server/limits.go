@@ -46,6 +46,11 @@ func (l *sourceLimitedListener) Accept() (net.Conn, error) {
 		if err != nil {
 			return nil, err
 		}
+		if tc, ok := c.(*net.TCPConn); ok {
+			if err := tc.SetNoDelay(true); err != nil {
+				l.logger.LogAttrs(context.Background(), slog.LevelWarn, "connection.nodelay_failed", slog.String("error", err.Error()))
+			}
+		}
 		src := sourceOf(c.RemoteAddr().String())
 		if l.acquire(src) {
 			return &sourceConn{Conn: c, release: sync.OnceFunc(func() { l.release(src) })}, nil

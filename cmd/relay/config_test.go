@@ -43,7 +43,7 @@ func TestDecodeConfigFull(t *testing.T) {
 		"dpop_nonces": {"key_file": "/secrets/nonce"},
 		"session": {"interval": "30s", "grace": "1m"},
 		"limits": {"max_tunnels": 5, "max_tunnels_per_source": 2, "max_conns_per_source": 3, "failed_auth_per_minute": 4,
-			"dial_timeout": "1s", "introspection_timeout": "2s", "read_header_timeout": "3s", "idle_timeout": "4h"},
+			"dial_timeout": "1s", "introspection_timeout": "2s", "read_header_timeout": "3s", "idle_timeout": "4h", "max_tunnel_lifetime": "12h"},
 		"shutdown_timeout": "5m",
 		"log_level": "DEBUG"
 	}`))
@@ -55,6 +55,9 @@ func TestDecodeConfigFull(t *testing.T) {
 	}
 	if c.Limits.MaxTunnels != 5 || time.Duration(c.Limits.IdleTimeout) != 4*time.Hour || c.LogLevel != slog.LevelDebug {
 		t.Fatalf("config %+v", c)
+	}
+	if time.Duration(c.Limits.MaxTunnelLifetime) != 12*time.Hour {
+		t.Fatalf("lifetime %v", c.Limits.MaxTunnelLifetime)
 	}
 	if time.Duration(c.Session.Grace) != time.Minute {
 		t.Fatalf("grace %v", c.Session.Grace)

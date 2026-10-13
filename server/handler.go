@@ -49,6 +49,7 @@ const (
 	CloseExpired         = "expired"
 	CloseUnverified      = "session_unverified"
 	CloseIdle            = "idle"
+	CloseLifetime        = "lifetime"
 	ClosePanic           = "panic"
 	CloseShutdown        = "shutdown"
 	CloseError           = "error"
@@ -208,6 +209,10 @@ func (s *Server) relay(ctx context.Context, w http.ResponseWriter, r *http.Reque
 		return
 	}
 	target := conn.(*net.TCPConn)
+	if nerr := target.SetNoDelay(true); nerr != nil {
+		s.reject(ctx, w, r, &rejection{status: http.StatusBadGateway, reason: reasonTargetUnreachable, cause: errors.Join(nerr, target.Close())})
+		return
+	}
 
 	client, err := accept(w, r)
 	if err != nil {
@@ -224,6 +229,7 @@ func (s *Server) relay(ctx context.Context, w http.ResponseWriter, r *http.Reque
 	var counters tunnel.Counters
 	err = tunnel.Pipe(sctx, client, target, &counters, tunnel.Options{
 		IdleTimeout: s.limits.IdleTimeout,
+		MaxLifetime: s.limits.MaxTunnelLifetime,
 		OnPanic: func(recovered any) {
 			s.cfg.Logger.LogAttrs(ctx, slog.LevelError, "tunnel.panic", slog.Uint64("tunnel", t.ID), slog.Any("recovered", recovered))
 		},
@@ -265,6 +271,8 @@ func closeReason(err error) string {
 		return CloseUnverified
 	case errors.Is(err, tunnel.ErrIdle):
 		return CloseIdle
+	case errors.Is(err, tunnel.ErrLifetime):
+		return CloseLifetime
 	case errors.Is(err, tunnel.ErrPanic):
 		return ClosePanic
 	case errors.Is(err, ErrClosed):

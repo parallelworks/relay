@@ -100,6 +100,20 @@ func TestIdleTunnelCloses(t *testing.T) {
 	}
 }
 
+func TestTunnelLifetimeIsCapped(t *testing.T) {
+	t.Parallel()
+	rec := newRecorder()
+	e := relaytest.Start(t, &relaytest.Options{Observer: rec, Limits: server.Limits{MaxTunnelLifetime: 100 * time.Millisecond}})
+	resp, conn := e.Connect(t.Context(), t, e.Echo.String(), e.AS.Issue(e.Grant(e.Echo)), false)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status %d", resp.StatusCode)
+	}
+	defer closeLog(t, conn)
+	if c := waitClosed(t, rec); c.Reason != server.CloseLifetime || c.Duration < 100*time.Millisecond {
+		t.Fatalf("closed %+v", c)
+	}
+}
+
 func TestShutdownWaitsThenClosesTunnels(t *testing.T) {
 	t.Parallel()
 	protocols(t, func(t *testing.T, http2 bool) {

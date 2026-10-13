@@ -19,6 +19,8 @@ var (
 	ErrIdle = errors.New("tunnel: idle timeout")
 	// ErrPanic reports a tunnel closed because one of its copy goroutines panicked.
 	ErrPanic = errors.New("tunnel: panic")
+	// ErrLifetime reports a tunnel closed because it reached its maximum lifetime.
+	ErrLifetime = errors.New("tunnel: maximum lifetime reached")
 )
 
 var buffers = sync.Pool{New: func() any { return new([BufferSize]byte) }}
@@ -39,6 +41,8 @@ type Counters struct {
 type Options struct {
 	// IdleTimeout closes the tunnel when no byte moves in either direction for this long. Zero disables it.
 	IdleTimeout time.Duration
+	// MaxLifetime closes the tunnel this long after it opened, however busy it is. Zero disables it.
+	MaxLifetime time.Duration
 	// OnPanic is called with the recovered value when a copy goroutine panics.
 	OnPanic func(recovered any)
 }
@@ -47,6 +51,11 @@ type Options struct {
 // either side fails, ctx ends, or the tunnel idles out. It closes both connections before returning
 // and reports why the tunnel ended: nil for a clean end of stream in both directions.
 func Pipe(ctx context.Context, client, target Conn, counters *Counters, opts Options) error {
+	if opts.MaxLifetime > 0 {
+		var stop context.CancelFunc
+		ctx, stop = context.WithTimeoutCause(ctx, opts.MaxLifetime, ErrLifetime)
+		defer stop()
+	}
 	ctx, cancel := context.WithCancelCause(ctx)
 	defer cancel(nil)
 

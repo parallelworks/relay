@@ -73,9 +73,10 @@ type Limits struct {
 	IntrospectionTimeout time.Duration
 	ReadHeaderTimeout    time.Duration
 	IdleTimeout          time.Duration
+	MaxTunnelLifetime    time.Duration
 }
 
-func (l Limits) withDefaults() Limits {
+func (l *Limits) setDefaults() {
 	positive(&l.MaxTunnels, 10_000)
 	positive(&l.MaxTunnelsPerSource, 256)
 	positive(&l.MaxConnsPerSource, 64)
@@ -85,7 +86,7 @@ func (l Limits) withDefaults() Limits {
 	positive(&l.IntrospectionTimeout, 10*time.Second)
 	positive(&l.ReadHeaderTimeout, 10*time.Second)
 	positive(&l.IdleTimeout, time.Hour)
-	return l
+	positive(&l.MaxTunnelLifetime, 24*time.Hour)
 }
 
 func positive[T int | time.Duration](v *T, def T) {
@@ -142,7 +143,8 @@ func New(cfg *Config) (*Server, error) {
 	if cfg.Observer == nil {
 		cfg.Observer = nopObserver{}
 	}
-	limits := cfg.Limits.withDefaults()
+	cfg.Limits.setDefaults()
+	limits := cfg.Limits
 	s := &Server{
 		cfg:      *cfg,
 		limits:   limits,

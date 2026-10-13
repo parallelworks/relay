@@ -354,3 +354,43 @@ func BenchmarkPipe(b *testing.B) {
 		b.Log(err)
 	}
 }
+
+func TestPipeMaxLifetime(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		clientApp, clientRelay := memPair()
+		targetRelay, targetApp := memPair()
+		defer func() {
+			if err := errors.Join(clientApp.Close(), targetApp.Close()); err != nil {
+				t.Log(err)
+			}
+		}()
+		go func() {
+			if _, err := io.Copy(io.Discard, targetApp); err != nil {
+				return
+			}
+		}()
+		stop := make(chan struct{})
+		go func() {
+			for {
+				select {
+				case <-stop:
+					return
+				case <-time.After(time.Second):
+				}
+				if _, err := clientApp.Write([]byte("x")); err != nil {
+					return
+				}
+			}
+		}()
+		start := time.Now()
+		err := Pipe(t.Context(), clientRelay, targetRelay, new(Counters), Options{IdleTimeout: time.Minute, MaxLifetime: time.Hour})
+		close(stop)
+		if !errors.Is(err, ErrLifetime) {
+			t.Fatalf("Pipe = %v, want ErrLifetime", err)
+		}
+		if elapsed := time.Since(start); elapsed != time.Hour {
+			t.Fatalf("closed after %v of steady traffic, want exactly the lifetime", elapsed)
+		}
+	})
+}

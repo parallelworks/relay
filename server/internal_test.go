@@ -102,6 +102,7 @@ func TestCloseReason(t *testing.T) {
 		session.ErrExpired:                      CloseExpired,
 		session.ErrNoAnswer:                     CloseUnverified,
 		tunnel.ErrIdle:                          CloseIdle,
+		tunnel.ErrLifetime:                      CloseLifetime,
 		fmt.Errorf("%w: boom", tunnel.ErrPanic): ClosePanic,
 		ErrClosed:                               CloseShutdown,
 		errors.New("reset"):                     CloseError,

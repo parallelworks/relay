@@ -125,6 +125,7 @@ func serve(ctx context.Context, cfg *Config, logger *slog.Logger, ready func(net
 			IntrospectionTimeout: time.Duration(l.IntrospectionTimeout),
 			ReadHeaderTimeout:    time.Duration(l.ReadHeaderTimeout),
 			IdleTimeout:          time.Duration(l.IdleTimeout),
+			MaxTunnelLifetime:    time.Duration(l.MaxTunnelLifetime),
 		},
 	})
 	if err != nil {

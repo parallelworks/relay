@@ -56,6 +56,20 @@ GOFIPS140=certified CGO_ENABLED=0 go build -trimpath ./cmd/relay
 | `shutdown_timeout` | How long `SIGTERM` waits for open tunnels before closing them. Default `30s`. |
 | `log_level` | `DEBUG`, `INFO`, `WARN` or `ERROR`. Logs are JSON on standard error. |
 
+## Client
+
+[`client`](client) opens a tunnel and returns a `net.Conn`. It imports only the standard library and the JOSE library.
+
+```go
+conn, err := client.Dial(ctx, "https://relay.example.com:8443", "10.4.2.17:22", accessToken, dpopKey)
+```
+
+The access token and the address it grants come from the authorization server; `dpopKey` is the private key the token is bound to. A `client.Dialer` sets the TLS configuration and can send `CONNECT` over HTTP/2 instead of HTTP/1.1. A refusal is a `*client.Error` with the status, the DPoP error code and `Retry-After`.
+
+## Benchmarks
+
+[`bench`](bench) is a separate module. It compares `CONNECT` over HTTP/1.1 and HTTP/2 with a WebSocket tunnel: throughput through one and 64 tunnels, and the latency from dialing to the first relayed byte. CI runs it on the base branch and the change on the same runner. It fails when a result is significantly worse (benchstat statistics, p < 0.05) by more than 10%, or when `CONNECT` over HTTP/1.1 moves fewer bytes per second than the WebSocket tunnel. The WebSocket code lives only in that module, which never runs in FIPS 140-3 only mode: the WebSocket handshake needs SHA-1.
+
 ## Conformance
 
 [`conformance`](conformance) checks an authorization server and a relay from the outside, over HTTP/1.1 and HTTP/2. To check an authorization server, implement `conformance.Environment` with tokens it issues to a running relay and call `conformance.Run` from a Go test.
@@ -65,6 +79,7 @@ GOFIPS140=certified CGO_ENABLED=0 go build -trimpath ./cmd/relay
 ```sh
 go test -race -shuffle=on ./...
 (cd integration && go test -race ./...)
+(cd bench && go test -run '^$' -bench . ./...)
 GOFIPS140=certified GODEBUG=fips140=only go test ./...
 ```
 

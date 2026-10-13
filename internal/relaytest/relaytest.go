@@ -5,6 +5,7 @@ package relaytest
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/x509"
 	"errors"
@@ -58,6 +59,7 @@ type Env struct {
 	Roots    *x509.CertPool
 	Echo     netip.AddrPort
 	Prover   *dpop.Prover
+	Key      *ecdsa.PrivateKey
 	ClientID string
 	Sessions *session.Registry
 	Logs     *Buffer
@@ -148,9 +150,9 @@ func Start(t testing.TB, opts *Options) *Env {
 	})
 
 	e.Echo = StartEcho(t)
-	key, err := dpop.GenerateKey()
+	e.Key, err = dpop.GenerateKey()
 	must(t, err)
-	e.Prover, err = dpop.NewProver(key)
+	e.Prover, err = dpop.NewProver(e.Key)
 	must(t, err)
 	return e
 }

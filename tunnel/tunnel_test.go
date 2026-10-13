@@ -394,3 +394,35 @@ func TestPipeMaxLifetime(t *testing.T) {
 		}
 	})
 }
+
+func TestPipeDoesNotAllocateAtSteadyState(t *testing.T) {
+	clientApp, clientRelay := memPair()
+	targetRelay, targetApp := memPair()
+	result := make(chan error, 1)
+	go func() {
+		result <- Pipe(t.Context(), clientRelay, targetRelay, new(Counters), Options{IdleTimeout: time.Hour})
+	}()
+	chunk := make([]byte, BufferSize)
+	got := make([]byte, BufferSize)
+	var target io.Reader = targetApp
+	relayMiB := func() {
+		for range (1 << 20) / BufferSize {
+			if _, err := clientApp.Write(chunk); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := io.ReadFull(target, got); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	relayMiB()
+	if allocs := testing.AllocsPerRun(20, relayMiB); allocs != 0 {
+		t.Fatalf("%v allocations per relayed MiB, want 0", allocs)
+	}
+	if err := errors.Join(clientApp.CloseWrite(), targetApp.CloseWrite()); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-result; err != nil {
+		t.Fatal(err)
+	}
+}

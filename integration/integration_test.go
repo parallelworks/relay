@@ -16,7 +16,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -30,9 +29,9 @@ import (
 	"go.uber.org/goleak"
 	"golang.org/x/crypto/ssh"
 
+	"github.com/parallelworks/relay/client"
 	"github.com/parallelworks/relay/dpop"
 	"github.com/parallelworks/relay/internal/fakeas"
-	"github.com/parallelworks/relay/internal/rawconnect"
 	"github.com/parallelworks/relay/internal/testpki"
 )
 
@@ -259,22 +258,12 @@ func (p *relayProcess) stop(t *testing.T) {
 	}
 }
 
-type tunnelConn struct {
-	rawconnect.Conn
-	addr net.Addr
-}
-
-func (c tunnelConn) LocalAddr() net.Addr              { return c.addr }
-func (c tunnelConn) RemoteAddr() net.Addr             { return c.addr }
-func (c tunnelConn) SetDeadline(time.Time) error      { return nil }
-func (c tunnelConn) SetReadDeadline(time.Time) error  { return nil }
-func (c tunnelConn) SetWriteDeadline(time.Time) error { return nil }
-
 type env struct {
 	as       *fakeas.AS
 	relay    *relayProcess
 	roots    *x509.CertPool
 	clientID string
+	key      *ecdsa.PrivateKey
 	prover   *dpop.Prover
 	ssh      *sshServer
 	sshKey   ssh.Signer
@@ -287,17 +276,12 @@ func (e *env) dial(t *testing.T, session string) *ssh.Client {
 		Subject: "alice", Audience: []string{e.clientID}, JKT: e.prover.Thumbprint(), Target: target,
 		Session: session, Expires: time.Now().Add(time.Hour),
 	})
-	proof, err := e.prover.Proof(http.MethodConnect, dpop.TargetURI(target), token, "")
-	must(t, err)
-	h := http.Header{"Authorization": {"DPoP " + token}, "Dpop": {proof}}
-	resp, conn, err := rawconnect.Do(t.Context(), &rawconnect.Request{Addr: e.relay.addr, Roots: e.roots, Authority: target, Header: h})
-	must(t, err)
-	if conn == nil {
-		t.Fatalf("status %d: %s\n%s", resp.StatusCode, resp.Body, e.relay.Logs())
+	d := &client.Dialer{TLSConfig: &tls.Config{RootCAs: e.roots}}
+	conn, err := d.Dial(t.Context(), "https://"+e.relay.addr, target, token, e.key)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, e.relay.Logs())
 	}
-	addr, err := net.ResolveTCPAddr("tcp", target)
-	must(t, err)
-	sc, chans, reqs, err := ssh.NewClientConn(tunnelConn{Conn: conn, addr: addr}, target, &ssh.ClientConfig{
+	sc, chans, reqs, err := ssh.NewClientConn(conn, target, &ssh.ClientConfig{
 		Config:            sshAlgorithms,
 		User:              "alice",
 		Auth:              []ssh.AuthMethod{ssh.PublicKeys(e.sshKey)},
@@ -305,17 +289,17 @@ func (e *env) dial(t *testing.T, session string) *ssh.Client {
 		HostKeyAlgorithms: []string{ssh.KeyAlgoECDSA256},
 	})
 	must(t, err)
-	client := ssh.NewClient(sc, chans, reqs)
+	sshClient := ssh.NewClient(sc, chans, reqs)
 	t.Cleanup(func() {
-		if err := client.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+		if err := sshClient.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
 			t.Log(err)
 		}
 	})
-	return client
+	return sshClient
 }
 
-func whoami(client *ssh.Client) (string, error) {
-	s, err := client.NewSession()
+func whoami(c *ssh.Client) (string, error) {
+	s, err := c.NewSession()
 	if err != nil {
 		return "", err
 	}
@@ -369,9 +353,9 @@ func newEnv(t *testing.T) (e *env, configPath string) {
 	})
 	must(t, err)
 
-	key, err := dpop.GenerateKey()
+	e.key, err = dpop.GenerateKey()
 	must(t, err)
-	e.prover, err = dpop.NewProver(key)
+	e.prover, err = dpop.NewProver(e.key)
 	must(t, err)
 	sshKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	must(t, err)
@@ -423,15 +407,15 @@ func TestRelayCarriesSSH(t *testing.T) {
 	}
 	e.clientID = readClientID(t, config)
 
-	client := e.dial(t, "session-main")
+	main := e.dial(t, "session-main")
 	t.Run("interactive session", func(t *testing.T) {
-		if who, err := whoami(client); err != nil || who != "alice" {
+		if who, err := whoami(main); err != nil || who != "alice" {
 			t.Fatalf("whoami = %q, %v", who, err)
 		}
 	})
 
 	t.Run("sftp 1 GiB", func(t *testing.T) {
-		sc, err := sftp.NewClient(client, sftp.UseConcurrentWrites(true), sftp.MaxConcurrentRequestsPerFile(64))
+		sc, err := sftp.NewClient(main, sftp.UseConcurrentWrites(true), sftp.MaxConcurrentRequestsPerFile(64))
 		must(t, err)
 		defer func() { must(t, sc.Close()) }()
 		block := make([]byte, 1<<20)
@@ -474,7 +458,7 @@ func TestRelayCarriesSSH(t *testing.T) {
 			}
 			time.Sleep(certReload / 2)
 		}
-		if who, err := whoami(client); err != nil || who != "alice" {
+		if who, err := whoami(main); err != nil || who != "alice" {
 			t.Fatalf("tunnel opened before rotation broke: %q, %v", who, err)
 		}
 		e.roots = next.Pool()
@@ -511,7 +495,7 @@ func TestRelayCarriesSSH(t *testing.T) {
 		if took := time.Since(revokedAt); took > 10*sessionCheck {
 			t.Fatalf("tunnel closed %v after revocation", took)
 		}
-		if who, err := whoami(client); err != nil || who != "alice" {
+		if who, err := whoami(main); err != nil || who != "alice" {
 			t.Fatalf("revocation closed another session's tunnel: %q, %v", who, err)
 		}
 		deadline := time.Now().Add(5 * time.Second)

@@ -42,7 +42,9 @@ After a `2xx` response, the TLS connection carries the tunnel. A response with a
 
 ### HTTP/2
 
-The client sends a `CONNECT` request (RFC 9113 §8.5) with `:method` = `CONNECT` and `:authority` = the target, and no `:scheme` or `:path`. The `Authorization` and `DPoP` fields are the same as for HTTP/1.1. After a `2xx` response, the stream carries the tunnel. The extended CONNECT protocol (RFC 8441) is not used.
+The client sends a `CONNECT` request (RFC 9113 §8.5) with `:method` = `CONNECT` and `:authority` = the target, and no `:scheme` or `:path`. The `Authorization` and `DPoP` fields are the same as for HTTP/1.1. After a `2xx` response, the stream carries the tunnel. The extended CONNECT protocol (RFC 8441) is not used, and a request with a `:protocol` pseudo-header is rejected.
+
+When the target ends its stream, the relay ends the HTTP/2 stream (`END_STREAM`) after the pending bytes and stops reading from the client (RFC 9113 §8.1 allows the `RST_STREAM` with `NO_ERROR` that may follow). When the client ends its stream, the relay half-closes the target connection and keeps relaying the target's bytes.
 
 ### Target
 
@@ -158,7 +160,9 @@ While a tunnel is open, the relay introspects its `relay_session` every `reintro
 - the response's `exp`, when present, has passed;
 - no valid response has been received for `reintrospect_grace` (default 120 seconds). The relay fails closed.
 
-Closing sends a TLS `close_notify` to the client after the pending bytes, or an HTTP/2 `RST_STREAM` with `CANCEL`, and closes the target connection.
+Closing sends a TLS `close_notify` to the client over HTTP/1.1, or resets the HTTP/2 stream with `RST_STREAM`, and closes the target connection.
+
+A relay also closes a tunnel that moves no byte for its idle timeout (default 1 hour) or reaches its maximum lifetime (default 24 hours), the same way.
 
 ## Egress policy
 
@@ -206,9 +210,11 @@ Every error response before the tunnel opens has a Problem Details body (RFC 945
 | `401` | Missing, malformed, inactive or mismatched token or proof | `WWW-Authenticate: DPoP error="invalid_token"` or `error="invalid_dpop_proof"`, with `algs="ES256 ES384 PS256"` (RFC 9449 §7.1) |
 | `401` | Nonce required | `WWW-Authenticate: DPoP error="use_dpop_nonce"`, `DPoP-Nonce` |
 | `403` | Token valid but the request authority differs from `relay_target`, or the target is outside the egress policy | |
-| `429` | Rate limit on failed authentication or connections from one source | `Retry-After` |
+| `429` | Rate limit on failed authentication, or too many concurrent tunnels from one source | `Retry-After` |
 | `502` | The target refused or did not answer | |
-| `503` | The relay is at its connection limit or cannot reach the AS | `Retry-After` |
+| `503` | The relay is at its tunnel limit, is shutting down, or cannot reach the AS | `Retry-After` |
+
+Over HTTP/1.1 every error response carries `Connection: close`. A source is an IPv4 address or an IPv6 /64. The relay closes connections from a source that already holds its share of connections before the TLS handshake, without a response.
 
 ## Observability (informative)
 

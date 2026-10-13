@@ -3,6 +3,7 @@ package fakeas
 import (
 	"crypto/ecdsa"
 	"crypto/rand"
+	"crypto/x509"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -275,4 +276,13 @@ func TestWriteJSONPanicsOnUnencodableValue(t *testing.T) {
 		}
 	}()
 	writeJSON(httptest.NewRecorder(), http.StatusOK, map[string]any{"c": make(chan int)})
+}
+
+func TestCAPEMTrustsTheServer(t *testing.T) {
+	t.Parallel()
+	as := New(t)
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(as.CAPEM()) || !pool.Equal(as.Pool()) {
+		t.Fatal("CAPEM does not match Pool")
+	}
 }

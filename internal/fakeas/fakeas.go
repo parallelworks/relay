@@ -104,6 +104,11 @@ func (a *AS) Pool() *x509.CertPool {
 	return a.ca.Pool()
 }
 
+// CAPEM returns the PEM certificate of the CA that issued the server's certificate.
+func (a *AS) CAPEM() []byte {
+	return a.ca.CertPEM()
+}
+
 // Handle replaces every endpoint with h, to simulate a misbehaving server. Pass nil to restore.
 func (a *AS) Handle(h http.HandlerFunc) {
 	a.mu.Lock()

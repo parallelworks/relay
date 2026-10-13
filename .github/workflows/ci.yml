@@ -45,9 +45,13 @@ jobs:
         with:
           go-version-file: go.mod
       - name: go mod tidy
-        run: go mod tidy -diff
+        run: |
+          go mod tidy -diff
+          (cd integration && go mod tidy -diff)
       - name: go mod verify
-        run: go mod verify
+        run: |
+          go mod verify
+          (cd integration && go mod verify)
       - name: gofmt
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - name: Threat model tests
@@ -83,6 +87,12 @@ jobs:
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.14.0
+      - name: golangci-lint (integration module)
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.14.0
+          working-directory: integration
+          args: --config=../.golangci.yml
 
   workflows:
     name: Workflow security
@@ -195,6 +205,50 @@ jobs:
           GOFIPS140: certified
           GODEBUG: fips140=only
         run: go test -race -shuffle=on -count=1 ./...
+      - name: Integration test with the certified module enforced
+        working-directory: integration
+        env:
+          GOFIPS140: certified
+          GODEBUG: fips140=only
+        run: go test -race -shuffle=on -count=1 ./...
+
+  integration:
+    name: Integration (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            raw.githubusercontent.com:443
+            proxy.golang.org:443
+            sum.golang.org:443
+            storage.googleapis.com:443
+            *.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            integration/go.sum
+      - name: Built binary, SSH and 1 GiB sftp through the relay
+        working-directory: integration
+        run: go test -race -shuffle=on -count=1 -v ./...
 
   fuzz:
     name: Fuzz (smoke)
@@ -263,12 +317,21 @@ jobs:
         with:
           go-version-file: go.mod
       - name: govulncheck (source)
-        run: go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" ./...
+        run: |
+          go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" ./...
+          (cd integration && go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" ./...)
+      - name: govulncheck (binary)
+        env:
+          GOFIPS140: certified
+          CGO_ENABLED: "0"
+        run: |
+          go build -trimpath -o "$RUNNER_TEMP/relay" ./cmd/relay
+          go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" -mode=binary "$RUNNER_TEMP/relay"
 
   ci-ok:
     name: CI OK
     if: always()
-    needs: [module, lint, workflows, test, fips, fuzz, vulnerabilities]
+    needs: [module, lint, workflows, test, fips, integration, fuzz, vulnerabilities]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     permissions: {}

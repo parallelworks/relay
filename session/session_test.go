@@ -56,7 +56,7 @@ func start(t *testing.T, f *fakeIntrospector, opts Options) (*Registry, context.
 	return r, ctx, stop
 }
 
-func expectOpenFor(t *testing.T, ctx context.Context, d time.Duration) {
+func expectOpenFor(ctx context.Context, t *testing.T, d time.Duration) {
 	t.Helper()
 	time.Sleep(d)
 	synctest.Wait()
@@ -65,7 +65,7 @@ func expectOpenFor(t *testing.T, ctx context.Context, d time.Duration) {
 	}
 }
 
-func expectClosed(t *testing.T, ctx context.Context, want error) {
+func expectClosed(ctx context.Context, t *testing.T, want error) {
 	t.Helper()
 	synctest.Wait()
 	if !errors.Is(context.Cause(ctx), want) {
@@ -79,10 +79,10 @@ func TestClosesWhenSessionInactive(t *testing.T) {
 		f := &fakeIntrospector{ans: introspect.Session{Active: true, Subject: "alice"}}
 		_, ctx, stop := start(t, f, Options{Interval: time.Minute})
 		defer stop()
-		expectOpenFor(t, ctx, 3*time.Minute)
+		expectOpenFor(ctx, t, 3*time.Minute)
 		f.set(introspect.Session{Active: false, Subject: "alice"}, nil)
 		time.Sleep(time.Minute)
-		expectClosed(t, ctx, ErrRevoked)
+		expectClosed(ctx, t, ErrRevoked)
 	})
 }
 
@@ -93,7 +93,7 @@ func TestClosesOnSubjectMismatch(t *testing.T) {
 		_, ctx, stop := start(t, f, Options{Interval: time.Minute})
 		defer stop()
 		time.Sleep(time.Minute)
-		expectClosed(t, ctx, ErrSubjectMismatch)
+		expectClosed(ctx, t, ErrSubjectMismatch)
 	})
 }
 
@@ -103,9 +103,9 @@ func TestClosesWhenSessionExpires(t *testing.T) {
 		f := &fakeIntrospector{ans: introspect.Session{Active: true, Subject: "alice", Expires: time.Now().Add(2 * time.Minute)}}
 		_, ctx, stop := start(t, f, Options{Interval: time.Minute})
 		defer stop()
-		expectOpenFor(t, ctx, time.Minute)
+		expectOpenFor(ctx, t, time.Minute)
 		time.Sleep(time.Minute)
-		expectClosed(t, ctx, ErrExpired)
+		expectClosed(ctx, t, ErrExpired)
 	})
 }
 
@@ -115,9 +115,9 @@ func TestFailsClosedAfterGrace(t *testing.T) {
 		f := &fakeIntrospector{err: introspect.ErrUnavailable}
 		_, ctx, stop := start(t, f, Options{Interval: time.Minute, Grace: 2 * time.Minute})
 		defer stop()
-		expectOpenFor(t, ctx, time.Minute)
+		expectOpenFor(ctx, t, time.Minute)
 		time.Sleep(time.Minute)
-		expectClosed(t, ctx, ErrNoAnswer)
+		expectClosed(ctx, t, ErrNoAnswer)
 	})
 }
 
@@ -127,13 +127,13 @@ func TestValidAnswerResetsGrace(t *testing.T) {
 		f := &fakeIntrospector{err: introspect.ErrUnavailable}
 		_, ctx, stop := start(t, f, Options{Interval: time.Minute, Grace: 2 * time.Minute})
 		defer stop()
-		expectOpenFor(t, ctx, time.Minute)
+		expectOpenFor(ctx, t, time.Minute)
 		f.set(introspect.Session{Active: true, Subject: "alice"}, nil)
-		expectOpenFor(t, ctx, time.Minute)
+		expectOpenFor(ctx, t, time.Minute)
 		f.set(introspect.Session{}, introspect.ErrUnavailable)
-		expectOpenFor(t, ctx, time.Minute)
+		expectOpenFor(ctx, t, time.Minute)
 		time.Sleep(time.Minute)
-		expectClosed(t, ctx, ErrNoAnswer)
+		expectClosed(ctx, t, ErrNoAnswer)
 	})
 }
 

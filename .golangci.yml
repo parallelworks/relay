@@ -101,8 +101,6 @@ linters:
         - name: exported
         - name: package-comments
         - name: context-as-argument
-          arguments:
-            - allowTypesBefore: "*testing.T,testing.TB"
         - name: error-return
         - name: error-strings
         - name: errorf

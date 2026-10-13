@@ -60,7 +60,7 @@ func FuzzConnectRequest(f *testing.F) {
 		if proof != "" {
 			h.Set(dpop.HeaderName, proof)
 		}
-		r := (&http.Request{
+		r := &http.Request{
 			Method:     method,
 			URL:        &url.URL{Host: authority},
 			Host:       authority,
@@ -70,7 +70,7 @@ func FuzzConnectRequest(f *testing.F) {
 			ProtoMajor: 1,
 			ProtoMinor: 1,
 			Body:       http.NoBody,
-		}).WithContext(t.Context())
+		}
 		w := httptest.NewRecorder()
 		s.ServeHTTP(w, r)
 		if !allowed[w.Code] {

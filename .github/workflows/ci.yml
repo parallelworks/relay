@@ -57,7 +57,7 @@ jobs:
       - name: gofmt
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - name: Threat model tests
-        run: go run ./internal/cmd/mitigations
+        run: go run ./internal/cmd/mitigations -all
 
   lint:
     name: Lint

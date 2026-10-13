@@ -1,0 +1,12 @@
+config:
+  issuer: https://auth.example.com
+  egress:
+    allow: [10.0.0.0/8]
+tls:
+  secretName: relay-tls
+registration:
+  secretName: relay-registration
+networkPolicy:
+  authorizationServer:
+    - cidr: 192.0.2.10/32
+      ports: [443]

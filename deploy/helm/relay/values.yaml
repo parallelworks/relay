@@ -1,0 +1,90 @@
+# Replicas share one registration, so every replica authenticates as the same client.
+replicaCount: 2
+
+image:
+  repository: ghcr.io/parallelworks/relay
+  # Defaults to the chart's appVersion. Set digest to pin the image.
+  tag: ""
+  digest: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+# Rendered into the relay's config.json. See the relay's README for every member.
+config:
+  # The authorization server's issuer identifier. Required.
+  issuer: ""
+  egress:
+    # Prefixes the relay may dial. Required.
+    allow: []
+    exceptions: []
+  session: {}
+  limits: {}
+  # Set to an object, such as {}, to require DPoP nonces.
+  dpopNonces: null
+  shutdownTimeout: 30s
+  logLevel: INFO
+
+tls:
+  # A kubernetes.io/tls Secret holding the relay's certificate. Required. A rotated Secret is
+  # served without a restart.
+  secretName: ""
+  reloadInterval: 1m
+
+registration:
+  # A Secret holding relay-key.pem and relay-client.json, created from the files `relay -register`
+  # writes. Required.
+  secretName: ""
+
+# A ConfigMap holding PEM roots for the authorization server. Empty uses the image's roots.
+issuerCA:
+  configMapName: ""
+  key: ca.crt
+
+# Sent to the relay as OTEL_EXPORTER_OTLP_ENDPOINT. Empty disables metric export.
+otlpEndpoint: ""
+
+service:
+  type: ClusterIP
+  port: 443
+  annotations: {}
+
+networkPolicy:
+  enabled: true
+  # Peers allowed to open tunnels. Empty allows every source.
+  ingressFrom: []
+  # The authorization server, as CIDRs and ports the relay may reach.
+  authorizationServer:
+    - cidr: ""
+      ports: [443]
+  # Resolution of the issuer's host name through the cluster DNS.
+  dns:
+    enabled: true
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: kube-system
+    podSelector:
+      matchLabels:
+        k8s-app: kube-dns
+  # Extra egress peers, such as an OpenTelemetry collector.
+  extraEgress: []
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 128Mi
+  limits:
+    memory: 512Mi
+
+terminationGracePeriodSeconds: 60
+
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []

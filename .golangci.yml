@@ -1,0 +1,140 @@
+version: "2"
+
+run:
+  go: "1.27"
+  tests: true
+
+linters:
+  default: none
+  enable:
+    - bodyclose
+    - contextcheck
+    - copyloopvar
+    - depguard
+    - durationcheck
+    - errcheck
+    - errname
+    - errorlint
+    - exhaustive
+    - forbidigo
+    - gocritic
+    - gosec
+    - govet
+    - ineffassign
+    - intrange
+    - misspell
+    - modernize
+    - nilerr
+    - noctx
+    - perfsprint
+    - revive
+    - sloglint
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+    - usestdlibvars
+    - usetesting
+    - wastedassign
+  settings:
+    depguard:
+      rules:
+        client-surface:
+          list-mode: strict
+          files:
+            - "**/client/*.go"
+            - "**/dpop/*.go"
+            - "!$test"
+          allow:
+            - $gostd
+            - github.com/go-jose/go-jose/v4
+            - github.com/parallelworks/relay/dpop
+        everywhere:
+          files:
+            - $all
+          deny:
+            - pkg: math/rand
+              desc: use crypto/rand
+            - pkg: crypto/sha1
+              desc: not approved for this module's FIPS 140-3 use
+            - pkg: crypto/md5
+              desc: not FIPS 140-3 approved
+            - pkg: github.com/gorilla/websocket
+              desc: the relay protocol has no WebSocket
+            - pkg: github.com/coder/websocket
+              desc: the relay protocol has no WebSocket
+            - pkg: golang.org/x/net/websocket
+              desc: the relay protocol has no WebSocket
+            - pkg: log$
+              desc: use log/slog
+            - pkg: github.com/pkg/errors
+              desc: use errors and fmt.Errorf
+    exhaustive:
+      default-signifies-exhaustive: true
+    forbidigo:
+      analyze-types: true
+      forbid:
+        - pattern: ^print(ln)?$
+        - pattern: ^http\.(Get|Head|Post|PostForm)$
+          msg: use a client with timeouts and a context
+        - pattern: ^http\.DefaultClient$
+          msg: use a client with timeouts
+        - pattern: ^http\.ListenAndServe(TLS)?$
+          msg: use an http.Server with timeouts
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+        - style
+      disabled-checks:
+        - whyNoLint
+    gosec:
+      config:
+        global:
+          audit: true
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+    revive:
+      rules:
+        - name: exported
+        - name: package-comments
+        - name: context-as-argument
+        - name: error-return
+        - name: error-strings
+        - name: errorf
+        - name: unexported-return
+        - name: unused-parameter
+        - name: unhandled-error
+          arguments:
+            - "fmt.Fprint"
+            - "fmt.Fprintf"
+            - "fmt.Fprintln"
+    sloglint:
+      no-mixed-args: true
+      kv-only: false
+      attr-only: true
+      context: scope
+      static-msg: true
+      key-naming-case: snake
+  exclusions:
+    generated: strict
+    rules:
+      - path: internal/cmd/
+        linters:
+          - forbidigo
+        text: "fmt\\.Fprint"
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/parallelworks/relay
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

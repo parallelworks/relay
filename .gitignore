@@ -1,0 +1,5 @@
+/coverage.out
+/dist/
+/bin/
+*.test
+/testdata/fuzz/**/corpus-cache/

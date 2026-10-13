@@ -70,6 +70,14 @@ linters:
               desc: use log/slog
             - pkg: github.com/pkg/errors
               desc: use errors and fmt.Errorf
+        telemetry-boundary:
+          files:
+            - $all
+            - "!**/telemetry/*.go"
+            - "!**/cmd/relay/*.go"
+          deny:
+            - pkg: go.opentelemetry.io
+              desc: OpenTelemetry is imported only by telemetry and cmd/relay
         bench-baseline:
           files:
             - "**/bench/bench_test.go"

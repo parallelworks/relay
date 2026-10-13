@@ -27,6 +27,7 @@ import (
 	"github.com/parallelworks/relay/registration"
 	"github.com/parallelworks/relay/server"
 	"github.com/parallelworks/relay/session"
+	"github.com/parallelworks/relay/telemetry"
 )
 
 func main() {
@@ -70,11 +71,22 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, ready fun
 	if err != nil {
 		return err
 	}
-	logger := slog.New(slog.NewJSONHandler(stderr, &slog.HandlerOptions{Level: cfg.LogLevel}))
-	return serve(ctx, cfg, logger, ready)
+	logger := slog.New(telemetry.NewLogHandler(stderr, cfg.LogLevel))
+	mp, shutdown, err := telemetry.Setup(ctx, version())
+	if err != nil {
+		return err
+	}
+	observer, err := telemetry.NewObserver(mp)
+	if err != nil {
+		return errors.Join(err, shutdown(context.WithoutCancel(ctx)))
+	}
+	err = serve(ctx, cfg, logger, observer, ready)
+	flushCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	return errors.Join(err, shutdown(flushCtx))
 }
 
-func serve(ctx context.Context, cfg *Config, logger *slog.Logger, ready func(net.Addr)) (err error) {
+func serve(ctx context.Context, cfg *Config, logger *slog.Logger, observer server.Observer, ready func(net.Addr)) (err error) {
 	roots, err := issuerRoots(cfg.IssuerCAFile)
 	if err != nil {
 		return err
@@ -116,6 +128,7 @@ func serve(ctx context.Context, cfg *Config, logger *slog.Logger, ready func(net
 		Sessions:       session.NewRegistry(ic, session.Options{Interval: time.Duration(cfg.Session.Interval), Grace: time.Duration(cfg.Session.Grace)}),
 		GetCertificate: certs.GetCertificate,
 		Logger:         logger,
+		Observer:       observer,
 		Limits: server.Limits{
 			MaxTunnels:           l.MaxTunnels,
 			MaxTunnelsPerSource:  l.MaxTunnelsPerSource,

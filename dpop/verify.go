@@ -265,12 +265,12 @@ type replayCache struct {
 func (c *replayCache) add(jti string, now time.Time) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	switch age := now.Sub(c.started); {
-	case c.current == nil || age >= 2*c.generation:
+	age := now.Sub(c.started)
+	if c.current == nil || age >= 2*c.generation {
 		c.previous = nil
 		c.current = map[string]struct{}{}
 		c.started = now
-	case age >= c.generation:
+	} else if age >= c.generation {
 		c.previous = c.current
 		c.current = map[string]struct{}{}
 		c.started = c.started.Add(c.generation)

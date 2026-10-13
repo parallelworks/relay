@@ -62,3 +62,16 @@ func TestMustFailsTheTest(t *testing.T) {
 		t.Fatal("must did not fail on an error")
 	}
 }
+
+func TestLeafPEMIsAKeyPair(t *testing.T) {
+	t.Parallel()
+	ca := New(t)
+	certPEM, keyPEM := ca.LeafPEM(t, "127.0.0.1")
+	pair, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pair.Leaf.Verify(x509.VerifyOptions{DNSName: "127.0.0.1", Roots: ca.Pool()}); err != nil {
+		t.Fatal(err)
+	}
+}

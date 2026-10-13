@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/pem"
 	"math/big"
 	"net"
 	"testing"
@@ -86,6 +87,17 @@ func (ca *CA) Leaf(t testing.TB, hosts ...string) tls.Certificate {
 	der, err := x509.CreateCertificate(rand.Reader, tmpl, ca.cert, &key.PublicKey, ca.key)
 	must(t, err)
 	return tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}
+}
+
+// LeafPEM issues a server certificate for hosts and returns it and its key PEM encoded.
+func (ca *CA) LeafPEM(t testing.TB, hosts ...string) (certPEM, keyPEM []byte) {
+	t.Helper()
+	leaf := ca.Leaf(t, hosts...)
+	der, err := x509.MarshalPKCS8PrivateKey(leaf.PrivateKey)
+	must(t, err)
+	certPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leaf.Certificate[0]})
+	keyPEM = pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
+	return certPEM, keyPEM
 }
 
 // ServerConfig returns a TLS 1.3 server configuration presenting a leaf for 127.0.0.1, ::1 and localhost.

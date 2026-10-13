@@ -82,6 +82,7 @@ This model covers the relay process, its configuration, and its three network bo
 | M-52 | 5 | T | An unvetted dependency reaches client builds | `client` and `dpop` import only the standard library and go-jose | `internal/cmd/mitigations.TestClientDependencies` |
 | M-53 | 4 | E | The container gains privileges | Non-root, read-only root, no capabilities, `RuntimeDefault` seccomp, restricted Pod Security | `deploy.TestChartPodSecurity` |
 | M-54 | 3, 4 | E | The relay reaches more than it needs | The chart's NetworkPolicy allows egress only to the authorization server and the configured prefixes | `deploy.TestChartNetworkPolicy` |
+| M-55 | 1 | R | A user denies reaching a target | Every opened, closed and refused tunnel is logged with its time, source, subject, session, token hash prefix, target and outcome | `server.TestAuditRecords` |
 
 ## Supply chain
 
@@ -90,5 +91,5 @@ Supply-chain threats are mitigated by CI rather than unit tests. Every gate is r
 - Actions are pinned by commit SHA. Workflow permissions are least privilege. Runners are hardened with an egress allowlist.
 - `zizmor` and `actionlint` check workflows.
 - `go mod verify` and `govulncheck` run on source and binaries, with CodeQL, Trivy and Grype.
-- Builds are reproducible, which CI checks by building twice.
+- Builds are reproducible, which CI checks by building on x86-64 and arm64 runners and comparing the binaries and the image digest.
 - Releases carry SLSA Build Level 3 provenance, SBOMs and Sigstore signatures.

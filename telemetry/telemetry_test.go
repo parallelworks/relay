@@ -114,8 +114,8 @@ func TestObserverRecordsTheSpecSignals(t *testing.T) {
 	}
 	ctx := t.Context()
 	tun := server.Tunnel{ID: 1, Subject: "alice", Target: netip.MustParseAddrPort("10.0.0.1:22"), Protocol: "HTTP/1.1"}
-	o.TunnelOpened(ctx, tun)
-	o.TunnelOpened(ctx, tun)
+	o.TunnelOpened(ctx, &tun)
+	o.TunnelOpened(ctx, &tun)
 	o.TunnelClosed(ctx, &server.Closed{Tunnel: tun, Reason: server.CloseRevoked, Upstream: 10, Downstream: 20, Duration: 3 * time.Second})
 	o.TunnelRejected(ctx, server.Rejection{Status: http.StatusUnauthorized, Reason: "proof"})
 	o.TunnelRejected(ctx, server.Rejection{Status: http.StatusForbidden, Reason: "target_mismatch"})

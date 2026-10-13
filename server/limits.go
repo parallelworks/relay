@@ -12,11 +12,16 @@ import (
 
 // sourceOf groups clients by IPv4 address or IPv6 /64, the smallest block a host commonly holds.
 func sourceOf(remoteAddr string) netip.Prefix {
+	return sourceOfAddr(addrPort(remoteAddr).Addr())
+}
+
+// addrPort parses a peer address, returning the zero AddrPort for a peer that is not IP.
+func addrPort(remoteAddr string) netip.AddrPort {
 	ap, err := netip.ParseAddrPort(remoteAddr)
 	if err != nil {
-		return netip.Prefix{}
+		return netip.AddrPort{}
 	}
-	return sourceOfAddr(ap.Addr())
+	return ap
 }
 
 func sourceOfAddr(a netip.Addr) netip.Prefix {

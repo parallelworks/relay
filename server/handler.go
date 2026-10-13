@@ -77,8 +77,9 @@ type rejection struct {
 }
 
 type grant struct {
-	token  introspect.Token
-	target netip.AddrPort
+	token   introspect.Token
+	tokenID string
+	target  netip.AddrPort
 }
 
 // ServeHTTP handles one CONNECT request.
@@ -158,7 +159,7 @@ func (s *Server) authorize(ctx context.Context, r *http.Request) (grant, *reject
 	if err := s.cfg.Policy.Check(target); err != nil {
 		return grant{}, &rejection{status: http.StatusForbidden, reason: reasonEgressDenied, cause: err}
 	}
-	return grant{token: tok, target: target}, nil
+	return grant{token: tok, tokenID: TokenID(token), target: target}, nil
 }
 
 func credentials(h http.Header) (token, proof string, rej *rejection) {
@@ -224,8 +225,17 @@ func (s *Server) relay(ctx context.Context, w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	t := Tunnel{ID: sess.ID, Subject: g.token.Subject, Target: g.target, Protocol: r.Proto}
-	s.cfg.Observer.TunnelOpened(ctx, t)
+	t := Tunnel{
+		ID:       sess.ID,
+		Subject:  g.token.Subject,
+		Session:  g.token.Session,
+		TokenID:  g.tokenID,
+		Source:   addrPort(r.RemoteAddr),
+		Target:   g.target,
+		Protocol: r.Proto,
+	}
+	s.cfg.Logger.LogAttrs(ctx, slog.LevelInfo, "tunnel.opened", t.attrs()...)
+	s.cfg.Observer.TunnelOpened(ctx, &t)
 	var counters tunnel.Counters
 	err = tunnel.Pipe(sctx, client, target, &counters, tunnel.Options{
 		IdleTimeout: s.limits.IdleTimeout,
@@ -241,15 +251,11 @@ func (s *Server) relay(ctx context.Context, w http.ResponseWriter, r *http.Reque
 		Downstream: counters.Downstream.Load(),
 		Duration:   time.Since(sess.Started),
 	}
-	attrs := []slog.Attr{
-		slog.Uint64("tunnel", t.ID),
-		slog.String("sub", t.Subject),
-		slog.String("target", t.Target.String()),
-		slog.String("protocol", t.Protocol),
+	attrs := append(t.attrs(),
 		slog.Group("bytes", slog.Int64("upstream", c.Upstream), slog.Int64("downstream", c.Downstream)),
 		slog.Duration("duration", c.Duration),
 		slog.String("close_reason", c.Reason),
-	}
+	)
 	if c.Reason == CloseError {
 		attrs = append(attrs, slog.String("error", err.Error()))
 	}

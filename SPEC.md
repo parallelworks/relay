@@ -227,7 +227,9 @@ Relays emit OpenTelemetry signals. A conforming relay emits at least:
 | Counter | `relay.tunnel.bytes` | `direction` (`upstream`, `downstream`) |
 | Histogram | `relay.tunnel.duration` | `close_reason` |
 | Counter | `relay.auth.failures` | `reason` |
-| Log record | `tunnel.closed` | `sub`, `target`, `bytes.upstream`, `bytes.downstream`, `duration`, `close_reason` |
+| Log record | `tunnel.opened` | `tunnel`, `sub`, `session`, `token_id`, `source`, `target`, `protocol` |
+| Log record | `tunnel.closed` | the `tunnel.opened` attributes, `bytes.upstream`, `bytes.downstream`, `duration`, `close_reason` |
+| Log record | `tunnel.rejected` | `status`, `reason`, `source`, `authority`, and `token_id` when the request carried a token |
 
 Tokens never appear in any signal. A token is identified, where needed, by the first 8 hexadecimal characters of its SHA-256.
 

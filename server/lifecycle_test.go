@@ -24,10 +24,10 @@ type recorder struct {
 
 func newRecorder() *recorder { return &recorder{done: make(chan server.Closed, 16)} }
 
-func (r *recorder) TunnelOpened(_ context.Context, t server.Tunnel) {
+func (r *recorder) TunnelOpened(_ context.Context, t *server.Tunnel) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.opened = append(r.opened, t)
+	r.opened = append(r.opened, *t)
 }
 
 func (r *recorder) TunnelClosed(_ context.Context, c *server.Closed) {

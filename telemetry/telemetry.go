@@ -65,7 +65,7 @@ func NewObserver(mp metric.MeterProvider) (*Observer, error) {
 }
 
 // TunnelOpened implements server.Observer.
-func (o *Observer) TunnelOpened(ctx context.Context, _ server.Tunnel) {
+func (o *Observer) TunnelOpened(ctx context.Context, _ *server.Tunnel) {
 	o.tunnels.Add(ctx, 1, metric.WithAttributes(attribute.String("outcome", "opened")))
 	o.active.Add(ctx, 1)
 }

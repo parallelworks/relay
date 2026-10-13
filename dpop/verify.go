@@ -227,7 +227,7 @@ func sameURI(a, b string) bool {
 
 func normalizeURI(s string) (string, bool) {
 	u, err := url.Parse(s)
-	if err != nil || u.Opaque != "" || u.User != nil || u.Host == "" {
+	if err != nil || u.Opaque != "" || u.User != nil || u.Hostname() == "" {
 		return "", false
 	}
 	scheme := strings.ToLower(u.Scheme)

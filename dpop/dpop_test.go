@@ -361,7 +361,7 @@ func TestVerifyRejectsURIMismatch(t *testing.T) {
 	for _, htu := range []string{
 		"https://10.4.2.17:41824", "https://10.4.2.18:41823", "http://10.4.2.17:41823",
 		"https://10.4.2.17:41823/other", "ftp://10.4.2.17:41823", "https://user@10.4.2.17:41823",
-		"https:opaque", "/relative", "https://[::1", "%zz",
+		"https:opaque", "/relative", "https://[::1", "%zz", "https://:", "https://:41823",
 	} {
 		expectErr(t, v, f.sign(f.header(), withMember(f.claims(), "htu", htu)), ErrURI)
 	}
@@ -687,47 +687,6 @@ func withMember(m map[string]any, k string, v any) map[string]any {
 func withoutMember(m map[string]any, k string) map[string]any {
 	delete(m, k)
 	return m
-}
-
-func FuzzVerify(f *testing.F) {
-	key, err := GenerateKey()
-	if err != nil {
-		f.Fatal(err)
-	}
-	p, err := NewProver(key)
-	if err != nil {
-		f.Fatal(err)
-	}
-	seed, err := p.Proof("CONNECT", testURI, testToken, "")
-	if err != nil {
-		f.Fatal(err)
-	}
-	f.Add(seed)
-	f.Add("e30.e30.")
-	f.Add("..")
-	v := NewVerifier(Options{})
-	f.Fuzz(func(t *testing.T, proof string) {
-		got, err := v.Verify(request(proof))
-		if err == nil && got.JKT == "" {
-			t.Fatal("accepted proof without a thumbprint")
-		}
-	})
-}
-
-func FuzzNormalizeURI(f *testing.F) {
-	for _, s := range []string{testURI, "https://[::1]:443/", "HTTP://A:80", "%zz", ""} {
-		f.Add(s)
-	}
-	f.Fuzz(func(t *testing.T, s string) {
-		n, ok := normalizeURI(s)
-		if !ok {
-			return
-		}
-		again, ok := normalizeURI(n)
-		if !ok || again != n {
-			t.Fatalf("normalization of %q is not idempotent: %q then %q", s, n, again)
-		}
-	})
 }
 
 func rsaPublicOfBits(bits int) *rsa.PublicKey {

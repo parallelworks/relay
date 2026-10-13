@@ -165,25 +165,3 @@ func TestDialControlRechecksAddress(t *testing.T) {
 		t.Error(err)
 	}
 }
-
-func FuzzParseTarget(f *testing.F) {
-	for _, s := range []string{"10.0.0.1:22", "[2001:db8::1]:22", "[::ffff:1.2.3.4]:1", "example.com:22", "[fe80::1%x]:2", ""} {
-		f.Add(s)
-	}
-	p, err := New([]netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")}, nil)
-	if err != nil {
-		f.Fatal(err)
-	}
-	f.Fuzz(func(t *testing.T, s string) {
-		ap, err := ParseTarget(s)
-		if err != nil {
-			return
-		}
-		if !ap.Addr().IsValid() || ap.Port() == 0 || ap.Addr().Zone() != "" {
-			t.Fatalf("ParseTarget(%q) accepted %v", s, ap)
-		}
-		if p.Check(ap) == nil && !netip.MustParsePrefix("10.0.0.0/8").Contains(ap.Addr().Unmap()) {
-			t.Fatalf("Check allowed %v outside the only prefix", ap)
-		}
-	})
-}

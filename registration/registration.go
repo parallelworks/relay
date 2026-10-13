@@ -41,8 +41,10 @@ var (
 	ErrNotRegistered = errors.New("registration: relay is not registered")
 	// ErrAlreadyRegistered reports that credentials are already stored.
 	ErrAlreadyRegistered = errors.New("registration: relay is already registered")
-	// ErrPermissiveKeyFile reports a key file readable or writable by anyone but its owner.
-	ErrPermissiveKeyFile = errors.New("registration: key file permissions must be 0600")
+	// ErrPermissiveKeyFile reports a key file others may read or write.
+	ErrPermissiveKeyFile = errors.New("registration: key file must be 0600, or 0640 when owned by root")
+	// ErrKeyFileOwner reports a key file owned by neither the relay's user nor root.
+	ErrKeyFileOwner = errors.New("registration: key file must be owned by the relay's user or by root")
 	// ErrIssuerMismatch reports stored credentials registered with a different issuer.
 	ErrIssuerMismatch = errors.New("registration: stored credentials belong to another issuer")
 )
@@ -110,6 +112,25 @@ func (s *Store) Load(issuer string) (introspect.Credentials, error) {
 	return introspect.Credentials{ClientID: rec.ClientID, KeyID: rec.KeyID, Key: key}, nil
 }
 
+// checkKeyFile applies PostgreSQL's rule for private key files: a key owned by the relay's user is
+// 0600 or stricter; one owned by root may also be group-readable, 0640 or stricter, which is how
+// Kubernetes mounts a Secret into a pod with an fsGroup.
+func checkKeyFile(perm fs.FileMode, owner, euid int) error {
+	switch owner {
+	case 0:
+		if perm&0o037 != 0 {
+			return ErrPermissiveKeyFile
+		}
+	case euid:
+		if perm&0o077 != 0 {
+			return ErrPermissiveKeyFile
+		}
+	default:
+		return ErrKeyFileOwner
+	}
+	return nil
+}
+
 func (s *Store) loadKey() (key crypto.Signer, err error) {
 	f, err := s.root.Open(s.keyName)
 	if err != nil {
@@ -124,8 +145,8 @@ func (s *Store) loadKey() (key crypto.Signer, err error) {
 	if err != nil {
 		return nil, err
 	}
-	if info.Mode().Perm()&0o077 != 0 {
-		return nil, fmt.Errorf("%w: %s is %v", ErrPermissiveKeyFile, s.keyName, info.Mode().Perm())
+	if kerr := checkKeyFile(info.Mode().Perm(), fileOwner(info), os.Geteuid()); kerr != nil {
+		return nil, fmt.Errorf("%w: %s is %v", kerr, s.keyName, info.Mode().Perm())
 	}
 	raw, err := io.ReadAll(io.LimitReader(f, 64<<10))
 	if err != nil {

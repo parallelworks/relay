@@ -528,6 +528,7 @@ jobs:
             raw.githubusercontent.com:443
             *.actions.githubusercontent.com:443
             *.blob.core.windows.net:443
+            get.trivy.dev:443
             mirror.gcr.io:443
             ghcr.io:443
             pkg-containers.githubusercontent.com:443

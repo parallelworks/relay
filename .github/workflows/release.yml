@@ -94,7 +94,7 @@ jobs:
           DIGEST: ${{ needs.build.outputs.image-digest }}
         run: |
           {
-            gh release view "$TAG" --json body --jq .body
+            gh release view "$TAG" --json body --jq .body | sed '/^## Artifacts$/,$d'
             echo
             echo "## Artifacts"
             echo

@@ -170,7 +170,7 @@ func isFalse(b *bool) bool { return b != nil && !*b }
 // non-root UID 65532, read-only root, no capabilities, RuntimeDefault seccomp, no host access.
 func TestChartPodSecurity(t *testing.T) {
 	t.Parallel()
-	objects := mustRender(t)
+	objects := mustRender(t, "issuerCA.configMapName=issuer-ca", "config.dpopNonces.lifetime=2m", "nonceKey.secretName=nonce-key")
 	d, ok := objects["Deployment"]
 	if !ok {
 		t.Fatal("no Deployment")
@@ -296,7 +296,7 @@ func TestChartNetworkPolicy(t *testing.T) {
 
 func TestChartRendersTheRelayConfig(t *testing.T) {
 	t.Parallel()
-	objects := mustRender(t, "issuerCA.configMapName=issuer-ca", "config.dpopNonces.lifetime=2m", `config.session.interval=30s`)
+	objects := mustRender(t, "issuerCA.configMapName=issuer-ca", "config.dpopNonces.lifetime=2m", "nonceKey.secretName=nonce-key", `config.session.interval=30s`)
 	var cfg map[string]any
 	if err := json.Unmarshal([]byte(objects["ConfigMap"].Data["config.json"]), &cfg); err != nil {
 		t.Fatal(err)
@@ -305,7 +305,7 @@ func TestChartRendersTheRelayConfig(t *testing.T) {
 		"listen":         ":8443",
 		"issuer":         "https://auth.example.com",
 		"issuer_ca_file": "/etc/relay/issuer-ca/ca.crt",
-		"dpop_nonces":    map[string]any{"lifetime": "2m"},
+		"dpop_nonces":    map[string]any{"lifetime": "2m", "key_file": "/etc/relay/nonce-key/key"},
 		"session":        map[string]any{"interval": "30s"},
 		"registration":   map[string]any{"dir": "/var/lib/relay/registration"},
 	}
@@ -313,6 +313,10 @@ func TestChartRendersTheRelayConfig(t *testing.T) {
 		if !reflect.DeepEqual(cfg[k], v) {
 			t.Errorf("%s = %v, want %v", k, cfg[k], v)
 		}
+	}
+	single := mustRender(t, "replicaCount=1", "config.dpopNonces.lifetime=2m")
+	if strings.Contains(single["ConfigMap"].Data["config.json"], "key_file") {
+		t.Error("a single replica given a nonce key file it has no Secret for")
 	}
 	plain := mustRender(t)
 	if strings.Contains(plain["ConfigMap"].Data["config.json"], "dpop_nonces") {
@@ -322,7 +326,7 @@ func TestChartRendersTheRelayConfig(t *testing.T) {
 
 func TestChartRequiresValues(t *testing.T) {
 	t.Parallel()
-	for _, set := range []string{"config.issuer=", "tls.secretName=", "registration.secretName=", "config.egress.allow=null", "networkPolicy.authorizationServer[0].cidr="} {
+	for _, set := range []string{"config.dpopNonces.lifetime=2m", "config.issuer=", "tls.secretName=", "registration.secretName=", "config.egress.allow=null", "networkPolicy.authorizationServer[0].cidr="} {
 		if _, err := render(t, set); err == nil {
 			t.Errorf("rendered with %s", set)
 		}

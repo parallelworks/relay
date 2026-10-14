@@ -41,6 +41,11 @@ helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version }}
   "log_level" $c.logLevel
 -}}
 {{- if .Values.issuerCA.configMapName }}{{ $_ := set $cfg "issuer_ca_file" (printf "/etc/relay/issuer-ca/%s" .Values.issuerCA.key) }}{{ end -}}
-{{- if kindIs "map" $c.dpopNonces }}{{ $_ := set $cfg "dpop_nonces" $c.dpopNonces }}{{ end -}}
+{{- if kindIs "map" $c.dpopNonces }}
+{{- $nonces := deepCopy $c.dpopNonces }}
+{{- if .Values.nonceKey.secretName }}{{ $_ := set $nonces "key_file" (printf "/etc/relay/nonce-key/%s" .Values.nonceKey.key) }}
+{{- else if gt (int .Values.replicaCount) 1 }}{{ fail "config.dpopNonces with more than one replica needs nonceKey.secretName" }}{{ end }}
+{{- $_ := set $cfg "dpop_nonces" $nonces }}
+{{- end -}}
 {{- toPrettyJson $cfg -}}
 {{- end -}}

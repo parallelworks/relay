@@ -86,6 +86,11 @@ spec:
               mountPath: /etc/relay/issuer-ca
               readOnly: true
             {{- end }}
+            {{- if .Values.nonceKey.secretName }}
+            - name: nonce-key
+              mountPath: /etc/relay/nonce-key
+              readOnly: true
+            {{- end }}
       volumes:
         - name: config
           configMap:
@@ -102,6 +107,12 @@ spec:
         - name: issuer-ca
           configMap:
             name: {{ .Values.issuerCA.configMapName }}
+        {{- end }}
+        {{- if .Values.nonceKey.secretName }}
+        - name: nonce-key
+          secret:
+            secretName: {{ .Values.nonceKey.secretName }}
+            defaultMode: 0440
         {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:

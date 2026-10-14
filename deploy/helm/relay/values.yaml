@@ -20,7 +20,8 @@ config:
     exceptions: []
   session: {}
   limits: {}
-  # Set to an object, such as {}, to require DPoP nonces.
+  # Set to an object, such as {} or {lifetime: 2m}, to require DPoP nonces. With more than one
+  # replica, nonceKey.secretName is required too.
   dpopNonces: null
   shutdownTimeout: 30s
   logLevel: INFO
@@ -35,6 +36,12 @@ registration:
   # A Secret holding relay-key.pem and relay-client.json, created from the files `relay -register`
   # writes. Required.
   secretName: ""
+
+# A Secret holding a key of at least 32 random bytes that every replica signs DPoP nonces with,
+# so a nonce one replica issues is valid at another.
+nonceKey:
+  secretName: ""
+  key: key
 
 # A ConfigMap holding PEM roots for the authorization server. Empty uses the image's roots.
 issuerCA:

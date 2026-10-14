@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -20,6 +21,9 @@ type recorder struct {
 	closed   []server.Closed
 	rejected []server.Rejection
 	done     chan server.Closed
+	// sessions, when set, is sampled as each tunnel is reported closed.
+	sessions      func() int
+	openAtClosure []int
 }
 
 func newRecorder() *recorder { return &recorder{done: make(chan server.Closed, 16)} }
@@ -33,6 +37,9 @@ func (r *recorder) TunnelOpened(_ context.Context, t *server.Tunnel) {
 func (r *recorder) TunnelClosed(_ context.Context, c *server.Closed) {
 	r.mu.Lock()
 	r.closed = append(r.closed, *c)
+	if r.sessions != nil {
+		r.openAtClosure = append(r.openAtClosure, r.sessions())
+	}
 	r.mu.Unlock()
 	r.done <- *c
 }
@@ -59,6 +66,7 @@ func TestRevocationClosesTunnel(t *testing.T) {
 	protocols(t, func(t *testing.T, http2 bool) {
 		rec := newRecorder()
 		e := relaytest.Start(t, &relaytest.Options{Observer: rec, SessionInterval: 20 * time.Millisecond})
+		rec.sessions = e.Sessions.Open
 		g := e.Grant(e.Echo)
 		resp, conn := e.Connect(t.Context(), t, e.Echo.String(), e.AS.Issue(g), http2)
 		if resp.StatusCode != http.StatusOK {
@@ -80,8 +88,10 @@ func TestRevocationClosesTunnel(t *testing.T) {
 		if _, err := io.Copy(io.Discard, conn); err == nil && http2 {
 			t.Fatal("HTTP/2 stream ended cleanly after revocation")
 		}
-		if e.Sessions.Open() != 0 {
-			t.Fatal("session still registered")
+		rec.mu.Lock()
+		defer rec.mu.Unlock()
+		if !slices.Equal(rec.openAtClosure, []int{0}) {
+			t.Fatalf("sessions open when the tunnel was reported closed: %v", rec.openAtClosure)
 		}
 	})
 }

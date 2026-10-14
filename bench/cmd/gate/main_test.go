@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -132,4 +133,26 @@ func TestGateInputErrors(t *testing.T) {
 			t.Errorf("run(%q) succeeded", args)
 		}
 	}
+}
+
+func TestJudgeControlsTheFamilyWiseErrorRate(t *testing.T) {
+	t.Parallel()
+	ms := []measure{
+		{name: "a", cmp: comparison{base: 1, head: 2, p: 0.04}},
+		{name: "b", cmp: comparison{base: 1, head: 2, p: 0.001}},
+		{name: "c", cmp: comparison{base: 1, head: 2, p: 0.03}},
+		{name: "d", cmp: comparison{base: 1, head: 1, p: 0.0001}},
+		{name: "e", cmp: comparison{base: 1, head: 2, p: 0.5}},
+	}
+	judge(ms)
+	var got []string
+	for _, m := range ms {
+		if m.cmp.significant {
+			got = append(got, m.name)
+		}
+	}
+	if !slices.Equal(got, []string{"b"}) {
+		t.Fatalf("significant %v, want [b]: 0.0001 passes 0.05/5 but its centers are equal, 0.001 passes 0.05/4, and 0.03 fails 0.05/3", got)
+	}
+	judge(nil)
 }

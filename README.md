@@ -96,7 +96,7 @@ The access token and the address it grants come from the authorization server; `
 
 ## Benchmarks
 
-[`bench`](bench) is a separate module. It compares `CONNECT` over HTTP/1.1 and HTTP/2 with a WebSocket tunnel: throughput through one and 64 tunnels, and the latency from dialing to the first relayed byte. CI runs it on the base branch and the change on the same runner. It fails when a result is significantly worse (benchstat statistics, p < 0.05) by more than 10%, or when `CONNECT` over HTTP/1.1 moves fewer bytes per second than the WebSocket tunnel. The WebSocket code lives only in that module, which never runs in FIPS 140-3 only mode: the WebSocket handshake needs SHA-1.
+[`bench`](bench) is a separate module. It compares `CONNECT` over HTTP/1.1 and HTTP/2 with a WebSocket tunnel: throughput through one and 64 tunnels, and the latency from dialing to the first relayed byte. CI runs it on the base branch and the change on the same runner. It fails when a result is significantly worse by more than 10%, or when `CONNECT` over HTTP/1.1 moves fewer bytes per second than the WebSocket tunnel. Significance uses benchstat's Mann-Whitney U test with Holm's correction across all comparisons, so noise alone fails a run at most 5% of the time. The WebSocket code lives only in that module, which never runs in FIPS 140-3 only mode: the WebSocket handshake needs SHA-1.
 
 ## Conformance
 

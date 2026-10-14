@@ -8,7 +8,8 @@
     ".": {
       "extra-files": [
         { "type": "yaml", "path": "deploy/helm/relay/Chart.yaml", "jsonpath": "$.version" },
-        { "type": "yaml", "path": "deploy/helm/relay/Chart.yaml", "jsonpath": "$.appVersion" }
+        { "type": "yaml", "path": "deploy/helm/relay/Chart.yaml", "jsonpath": "$.appVersion" },
+        { "type": "json", "path": "compliance/component-definition.json", "jsonpath": "$['component-definition'].metadata.version" }
       ]
     }
   }

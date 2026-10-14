@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os/exec"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -309,10 +310,8 @@ func TestChartRendersTheRelayConfig(t *testing.T) {
 		"registration":   map[string]any{"dir": "/var/lib/relay/registration"},
 	}
 	for k, v := range want {
-		got, _ := json.Marshal(cfg[k])
-		exp, _ := json.Marshal(v)
-		if !bytes.Equal(got, exp) {
-			t.Errorf("%s = %s, want %s", k, got, exp)
+		if !reflect.DeepEqual(cfg[k], v) {
+			t.Errorf("%s = %v, want %v", k, cfg[k], v)
 		}
 	}
 	plain := mustRender(t)

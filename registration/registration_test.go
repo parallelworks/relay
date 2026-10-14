@@ -160,6 +160,29 @@ func TestRefusesPermissiveKeyFile(t *testing.T) {
 	if _, err := e.store.Load(e.meta.Issuer); err != nil {
 		t.Errorf("owner-only read: %v", err)
 	}
+	cases := []struct {
+		perm        os.FileMode
+		owner, euid int
+		want        error
+	}{
+		{0o600, 1000, 1000, nil},
+		{0o400, 1000, 1000, nil},
+		{0o640, 1000, 1000, ErrPermissiveKeyFile},
+		{0o640, 0, 65532, nil},
+		{0o440, 0, 65532, nil},
+		{0o600, 0, 65532, nil},
+		{0o660, 0, 65532, ErrPermissiveKeyFile},
+		{0o644, 0, 65532, ErrPermissiveKeyFile},
+		{0o604, 0, 65532, ErrPermissiveKeyFile},
+		{0o600, 1000, 65532, ErrKeyFileOwner},
+		{0o600, -1, -1, nil},
+		{0o644, -1, -1, ErrPermissiveKeyFile},
+	}
+	for _, c := range cases {
+		if err := checkKeyFile(c.perm, c.owner, c.euid); !errors.Is(err, c.want) {
+			t.Errorf("checkKeyFile(%v, owner %d, euid %d) = %v, want %v", c.perm, c.owner, c.euid, err, c.want)
+		}
+	}
 }
 
 func TestKeyPathCannotEscapeRoot(t *testing.T) {

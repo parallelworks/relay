@@ -1,0 +1,5 @@
+paths:
+  .github/workflows/*.yml:
+    ignore:
+      # actionlint does not know the $/ self-repository syntax yet: https://github.com/rhysd/actionlint/issues/711
+      - 'reusable workflow call "\$/\.github/workflows/build\.yml" at "uses" is not following the format'

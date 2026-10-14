@@ -1,0 +1,16 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/v17.11.2/schemas/config.json",
+  "release-type": "go",
+  "include-component-in-tag": false,
+  "include-v-in-tag": true,
+  "bump-minor-pre-major": true,
+  "packages": {
+    ".": {
+      "extra-files": [
+        { "type": "yaml", "path": "deploy/helm/relay/Chart.yaml", "jsonpath": "$.version" },
+        { "type": "yaml", "path": "deploy/helm/relay/Chart.yaml", "jsonpath": "$.appVersion" },
+        { "type": "json", "path": "compliance/component-definition.json", "jsonpath": "$['component-definition'].metadata.version" }
+      ]
+    }
+  }
+}

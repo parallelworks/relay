@@ -72,7 +72,7 @@ This model covers the relay process, its configuration, and its three network bo
 | M-42 | 2 | E | Revocation is evaded by cutting off the server | Sessions without a valid answer for the grace period are closed | `session.TestFailsClosedAfterGrace` |
 | M-43 | 1, 2 | I | Tokens leak through logs or traces | The log handler redacts token-shaped values; tokens are identified by hash prefix only | `telemetry.TestRedactsTokens` |
 | M-44 | 1 | I | Error bodies reveal why a credential failed | Bodies are generic Problem Details; the reason is only logged | `server.TestErrorBodiesOmitReason` |
-| M-45 | 4 | I | The registration key is readable by others | The relay refuses a key file with permissions other than 0600 | `registration.TestRefusesPermissiveKeyFile` |
+| M-45 | 4 | I | The registration key is readable by others | The relay refuses a key file others may read: 0600 when owned by its user, at most 0640 when owned by root (a Secret mounted with an fsGroup), PostgreSQL's rule | `registration.TestRefusesPermissiveKeyFile` |
 | M-46 | 4 | I | The private key leaves the relay | Registration sends only the public key | `registration.TestSendsOnlyPublicKey` |
 | M-47 | 4 | T | Configuration files outside the configured directory are read | Files are opened through `os.Root` | `registration.TestKeyPathCannotEscapeRoot` |
 | M-48 | 1 | D | A panic in one tunnel stops the relay | Panics close only the affected tunnel and are recorded | `tunnel.TestPanicClosesOnlyThatTunnel` |
@@ -82,6 +82,7 @@ This model covers the relay process, its configuration, and its three network bo
 | M-52 | 5 | T | An unvetted dependency reaches client builds | `client` and `dpop` import only the standard library and go-jose | `internal/cmd/mitigations.TestClientDependencies` |
 | M-53 | 4 | E | The container gains privileges | Non-root, read-only root, no capabilities, `RuntimeDefault` seccomp, restricted Pod Security | `deploy.TestChartPodSecurity` |
 | M-54 | 3, 4 | E | The relay reaches more than it needs | The chart's NetworkPolicy allows egress only to the authorization server and the configured prefixes | `deploy.TestChartNetworkPolicy` |
+| M-55 | 1 | R | A user denies reaching a target | Every opened, closed and refused tunnel is logged with its time, source, subject, session, token hash prefix, target and outcome | `server.TestAuditRecords` |
 
 ## Supply chain
 
@@ -90,5 +91,5 @@ Supply-chain threats are mitigated by CI rather than unit tests. Every gate is r
 - Actions are pinned by commit SHA. Workflow permissions are least privilege. Runners are hardened with an egress allowlist.
 - `zizmor` and `actionlint` check workflows.
 - `go mod verify` and `govulncheck` run on source and binaries, with CodeQL, Trivy and Grype.
-- Builds are reproducible, which CI checks by building twice.
+- Builds are reproducible, which CI checks by building on x86-64 and arm64 runners and comparing the binaries and the image digest.
 - Releases carry SLSA Build Level 3 provenance, SBOMs and Sigstore signatures.

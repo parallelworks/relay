@@ -49,15 +49,30 @@ jobs:
           go mod tidy -diff
           (cd integration && go mod tidy -diff)
           (cd bench && go mod tidy -diff)
+          (cd deploy && go mod tidy -diff)
       - name: go mod verify
         run: |
           go mod verify
           (cd integration && go mod verify)
           (cd bench && go mod verify)
+          (cd deploy && go mod verify)
       - name: gofmt
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - name: Threat model tests
-        run: go run ./internal/cmd/mitigations
+        run: go run ./internal/cmd/mitigations -all
+      - name: OSCAL component definition
+        env:
+          SCHEMA_URL: https://github.com/usnistgov/OSCAL/releases/download/v1.1.3/oscal_component_schema.json
+          SCHEMA_SHA256: 9bde069f8f65ec82ea626348cc40ae5d42b0f74c1a2a8b9289a1604bf521a15c
+          CATALOG_URL: https://raw.githubusercontent.com/usnistgov/oscal-content/78650f02ad9321bb7b817846f8fbd4f2bcd620de/nist.gov/SP800-53/rev5/json/NIST_SP-800-53_rev5_catalog.json
+          CATALOG_SHA256: 01f37cf90ea99d92242c936cbfbdebcc338eef1f71454e2acac36cc56e9bc062
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/schema.json" "$SCHEMA_URL"
+          curl -sSfL -o "$RUNNER_TEMP/catalog.json" "$CATALOG_URL"
+          echo "$SCHEMA_SHA256  $RUNNER_TEMP/schema.json" | sha256sum --check
+          echo "$CATALOG_SHA256  $RUNNER_TEMP/catalog.json" | sha256sum --check
+          go run github.com/santhosh-tekuri/jsonschema/cmd/jv@v0.7.0 "$RUNNER_TEMP/schema.json" compliance/component-definition.json
+          go run ./internal/cmd/compliance -catalog "$RUNNER_TEMP/catalog.json"
 
   lint:
     name: Lint
@@ -100,6 +115,12 @@ jobs:
         with:
           version: v2.14.0
           working-directory: bench
+          args: --config=../.golangci.yml
+      - name: golangci-lint (deploy module)
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.14.0
+          working-directory: deploy
           args: --config=../.golangci.yml
 
   workflows:
@@ -388,6 +409,7 @@ jobs:
           go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" ./...
           (cd integration && go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" ./...)
           (cd bench && go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" ./...)
+          (cd deploy && go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" ./...)
       - name: govulncheck (binary)
         env:
           GOFIPS140: certified
@@ -396,10 +418,153 @@ jobs:
           go build -trimpath -o "$RUNNER_TEMP/relay" ./cmd/relay
           go run "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}" -mode=binary "$RUNNER_TEMP/relay"
 
+  chart:
+    name: Helm chart
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            raw.githubusercontent.com:443
+            proxy.golang.org:443
+            sum.golang.org:443
+            storage.googleapis.com:443
+            *.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+            get.helm.sh:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            deploy/go.sum
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v4.3.0
+      - name: helm lint
+        run: helm lint --strict deploy/helm/relay -f deploy/helm/relay/ci/default-values.yaml
+      - name: Render
+        run: helm template relay deploy/helm/relay -f deploy/helm/relay/ci/default-values.yaml > "$RUNNER_TEMP/chart.yaml"
+      - name: kubeconform
+        run: go run github.com/yannh/kubeconform/cmd/kubeconform@v0.8.0 -strict -summary -kubernetes-version 1.28.0 "$RUNNER_TEMP/chart.yaml"
+      - name: kube-linter
+        run: go run golang.stackrox.io/kube-linter/cmd/kube-linter@v0.8.3 lint "$RUNNER_TEMP/chart.yaml"
+      - name: Chart tests
+        working-directory: deploy
+        run: go test -race -shuffle=on -count=1 ./...
+
+  release:
+    name: Release build (dry run, ${{ matrix.runner }})
+    strategy:
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
+    permissions:
+      contents: read
+      id-token: write # requested by the build workflow, which only uses it when publishing
+      attestations: write # requested by the build workflow, which only uses it when publishing
+      packages: write # requested by the build workflow, which only uses it when publishing
+    uses: $/.github/workflows/build.yml
+    with:
+      runner: ${{ matrix.runner }}
+      artifact: dist-${{ matrix.runner }}
+
+  reproducible:
+    name: Reproducible build
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions: {}
+    steps:
+      - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            *.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: dist-*
+          path: ${{ runner.temp }}/builds
+      - name: Both runners produced identical binaries and images
+        working-directory: ${{ runner.temp }}/builds
+        run: |
+          cat dist-ubuntu-latest/assets/checksums.txt dist-ubuntu-latest/image-digest.txt
+          diff dist-ubuntu-latest/assets/checksums.txt dist-ubuntu-24.04-arm/assets/checksums.txt
+          diff dist-ubuntu-latest/image-digest.txt dist-ubuntu-24.04-arm/image-digest.txt
+          (cd dist-ubuntu-latest/assets && sha256sum --check checksums.txt)
+          (cd dist-ubuntu-24.04-arm/assets && sha256sum --check checksums.txt)
+
+  container:
+    name: Container scan
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [linux/amd64, linux/arm64]
+    steps:
+      - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            raw.githubusercontent.com:443
+            *.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+            get.trivy.dev:443
+            mirror.gcr.io:443
+            ghcr.io:443
+            pkg-containers.githubusercontent.com:443
+            get.anchore.io:443
+            toolbox-data.anchore.io:443
+            grype.anchore.io:443
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist-ubuntu-latest
+          path: dist
+      - name: Unpack the OCI layout
+        run: mkdir "$RUNNER_TEMP/image" && tar -xf dist/image.tar -C "$RUNNER_TEMP/image"
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_PLATFORM: ${{ matrix.platform }}
+        with:
+          version: v0.75.0
+          input: ${{ runner.temp }}/image
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+        env:
+          GRYPE_PLATFORM: ${{ matrix.platform }}
+        with:
+          image: oci-dir:${{ runner.temp }}/image
+          grype-version: v0.120.1
+          severity-cutoff: high
+          only-fixed: true
+          fail-build: true
+          output-format: table
+
   ci-ok:
     name: CI OK
     if: always()
-    needs: [module, lint, workflows, test, fips, integration, fuzz, benchmarks, vulnerabilities]
+    needs: [module, lint, workflows, test, fips, integration, fuzz, benchmarks, vulnerabilities, chart, release, reproducible, container]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     permissions: {}

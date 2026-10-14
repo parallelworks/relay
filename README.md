@@ -7,6 +7,7 @@ The relay makes no access decisions of its own. Put it inside a private network 
 - **Protocol**: [SPEC.md](SPEC.md)
 - **Threat model**: [THREAT_MODEL.md](THREAT_MODEL.md)
 - **Security policy**: [SECURITY.md](SECURITY.md)
+- **NIST SP 800-53 controls**: [compliance](compliance)
 
 ## Standards
 
@@ -22,14 +23,23 @@ The relay makes no access decisions of its own. Put it inside a private network 
 | Cryptography | FIPS 140-3: built with the Go Cryptographic Module (`GOFIPS140=certified`) and run with `GODEBUG=fips140=only` |
 | Telemetry | OpenTelemetry |
 
-## Running
+## Installing
+
+Each release publishes static binaries for Linux, macOS and Windows on x86-64 and arm64, a distroless image `ghcr.io/parallelworks/relay` for Linux on both architectures, and the Helm chart `oci://ghcr.io/parallelworks/charts/relay`. All are built with `GOFIPS140=certified`, signed, and carry SBOMs and SLSA Build Level 3 provenance; [SECURITY.md](SECURITY.md) shows how to verify them. To build from source:
 
 ```sh
 GOFIPS140=certified CGO_ENABLED=0 go build -trimpath ./cmd/relay
+```
+
+`scripts/build.sh` builds every release binary the way releases do. Builds are reproducible: the same commit gives the same bytes on any host.
+
+## Running
+
+```sh
 ./relay -config /etc/relay/config.json
 ```
 
-`relay -version` prints the version and the FIPS 140-3 module it runs. The configuration is JSON; unknown members are errors.
+`relay -version` prints the version and the FIPS 140-3 module it runs. `relay -register` registers the relay with the authorization server if it has no registration yet, prints its `client_id`, and exits. The configuration is JSON; unknown members are errors.
 
 ```json
 {
@@ -48,13 +58,31 @@ GOFIPS140=certified CGO_ENABLED=0 go build -trimpath ./cmd/relay
 | `issuer` | The authorization server's issuer identifier. Its metadata is read from `/.well-known/oauth-authorization-server`. |
 | `issuer_ca_file` | PEM roots for the authorization server's certificate. Default: the system roots. |
 | `tls` | Directory, file names and reload interval of the relay's certificate and key. Changed files are served without a restart. |
-| `registration` | Directory for the relay's key and `client_id`, and the file holding a single-use initial access token for the first start. |
+| `registration` | Directory for the relay's key (`relay-key.pem`) and client (`relay-client.json`), and the file holding a single-use initial access token for the first start. The key must be owned by the relay's user with mode 0600, or by root with mode 0640, the rule PostgreSQL applies to its keys. |
 | `egress` | Prefixes the relay may dial, and special-purpose addresses inside them that it may dial anyway (SPEC.md, Egress policy). |
 | `dpop_nonces` | Present to require DPoP nonces. `lifetime` (default `5m`) and `key_file`, a key of at least 32 bytes shared by every replica. |
 | `session` | Re-introspection `interval` and `grace`. |
 | `limits` | `max_tunnels`, `max_tunnels_per_source`, `max_conns_per_source`, `failed_auth_per_minute`, `dial_timeout`, `introspection_timeout`, `read_header_timeout`, `idle_timeout`, `max_tunnel_lifetime` (default `24h`). |
 | `shutdown_timeout` | How long `SIGTERM` waits for open tunnels before closing them. Default `30s`. |
 | `log_level` | `DEBUG`, `INFO`, `WARN` or `ERROR`. Logs are JSON on standard error. |
+
+The relay logs every opened, closed and refused tunnel with its source, subject, session, token hash prefix, target and outcome (SPEC.md, Observability). It removes anything shaped like a token, proof or credential from every record. Metrics are exported over OTLP/HTTP when `OTEL_EXPORTER_OTLP_ENDPOINT` or `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` is set, configured by the standard `OTEL_*` variables.
+
+## Kubernetes
+
+The chart runs the relay under the `restricted` Pod Security Standard with a read-only root filesystem and no capabilities, spreads replicas across nodes, and adds a PodDisruptionBudget and a NetworkPolicy that admits only the relay's port and allows egress only to the authorization server, the allowed prefixes and DNS. Replicas share one registration, made once before installing:
+
+```sh
+relay -register -config register.json   # registration.dir is a local directory
+kubectl create namespace relay
+kubectl label namespace relay pod-security.kubernetes.io/enforce=restricted
+kubectl -n relay create secret generic relay-registration \
+  --from-file=relay-key.pem --from-file=relay-client.json
+kubectl -n relay create secret tls relay-tls --cert=tls.crt --key=tls.key
+helm install relay oci://ghcr.io/parallelworks/charts/relay -n relay -f values.yaml
+```
+
+`values.yaml` sets at least `config.issuer`, `config.egress.allow`, `tls.secretName`, `registration.secretName` and `networkPolicy.authorizationServer`; [`values.yaml`](deploy/helm/relay/values.yaml) in the chart describes every setting. To require DPoP nonces with more than one replica, set `config.dpopNonces` and `nonceKey.secretName`, a Secret holding at least 32 random bytes that every replica shares.
 
 ## Client
 
@@ -81,13 +109,16 @@ go test -race -shuffle=on ./...
 (cd integration && go test -race ./...)
 (cd bench && go test -run '^$' -bench . ./...)
 GOFIPS140=certified GODEBUG=fips140=only go test ./...
+(cd deploy && go test ./...)           # renders the chart with helm
+go run ./internal/cmd/mitigations -all # every threat model mitigation has its test
+go run ./internal/cmd/compliance       # every control's evidence exists
 ```
 
 The integration test builds the relay, registers it with an in-memory authorization server, and runs an SSH session and a 1 GiB `sftp` upload through it, revokes a session mid-transfer and rotates the certificate mid-run.
 
 ## Status
 
-Pre-release. The protocol is at version 1; the code is under construction.
+Pre-release: no version is tagged yet. The protocol is at version 1.
 
 ## License
 

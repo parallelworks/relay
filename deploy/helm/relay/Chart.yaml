@@ -1,0 +1,12 @@
+apiVersion: v2
+name: relay
+description: An authenticated TCP relay for HTTP CONNECT tunnels authorized by DPoP-bound OAuth tokens.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.28.0-0"
+home: https://github.com/parallelworks/relay
+sources:
+  - https://github.com/parallelworks/relay
+annotations:
+  artifacthub.io/license: Apache-2.0

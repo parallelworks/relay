@@ -20,13 +20,30 @@ Out of scope: the authorization server, targets behind the relay, and deployment
 
 ## Verifying releases
 
-Every release image and checksum file is signed with Sigstore keyless signing and carries SLSA build provenance:
+Release binaries, the image and the chart are built by the reusable workflow `.github/workflows/build.yml`, which signs them with Sigstore keyless signing and attests SLSA Build Level 3 provenance. The image also carries an SPDX SBOM attestation, and every release lists SPDX and CycloneDX SBOMs.
 
-```
-gh attestation verify oci://ghcr.io/parallelworks/relay:<version> --repo parallelworks/relay
+```sh
+# A binary, against its provenance
+gh attestation verify relay_linux_amd64 --repo parallelworks/relay \
+  --signer-workflow parallelworks/relay/.github/workflows/build.yml
+
+# The checksums file, against its signature
+cosign verify-blob checksums.txt --bundle checksums.txt.sigstore.json \
+  --certificate-identity 'https://github.com/parallelworks/relay/.github/workflows/build.yml@refs/heads/canary' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+sha256sum --check --ignore-missing checksums.txt
+
+# The image and the chart
+gh attestation verify oci://ghcr.io/parallelworks/relay:<version> --repo parallelworks/relay \
+  --signer-workflow parallelworks/relay/.github/workflows/build.yml
 cosign verify ghcr.io/parallelworks/relay:<version> \
-  --certificate-identity-regexp '^https://github.com/parallelworks/relay/' \
+  --certificate-identity 'https://github.com/parallelworks/relay/.github/workflows/build.yml@refs/heads/canary' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+cosign verify ghcr.io/parallelworks/charts/relay:<version> \
+  --certificate-identity 'https://github.com/parallelworks/relay/.github/workflows/build.yml@refs/heads/canary' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
+
+`go version -m relay` shows each binary's module versions and its FIPS 140-3 module (`GOFIPS140`).
 
 See [THREAT_MODEL.md](THREAT_MODEL.md) for the threats the relay is designed against and the test that proves each mitigation.

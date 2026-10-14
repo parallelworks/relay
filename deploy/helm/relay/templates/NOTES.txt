@@ -1,0 +1,4 @@
+The relay listens on {{ include "relay.fullname" . }}:{{ .Values.service.port }} and accepts CONNECT tunnels authorized by {{ .Values.config.issuer }}.
+
+Label the namespace for the restricted Pod Security Standard:
+  kubectl label namespace {{ .Release.Namespace }} pod-security.kubernetes.io/enforce=restricted

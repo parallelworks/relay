@@ -47,7 +47,7 @@ type rejections struct {
 	n  int
 }
 
-func (r *rejections) TunnelOpened(context.Context, server.Tunnel)  {}
+func (r *rejections) TunnelOpened(context.Context, *server.Tunnel) {}
 func (r *rejections) TunnelClosed(context.Context, *server.Closed) {}
 
 func (r *rejections) TunnelRejected(_ context.Context, rej server.Rejection) {

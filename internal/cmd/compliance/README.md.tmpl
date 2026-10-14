@@ -1,0 +1,36 @@
+# NIST SP 800-53 Rev 5
+
+<!-- Generated from component-definition.json by go run ./internal/cmd/compliance -write. Edit the JSON, not this file. -->
+
+FedRAMP High, like any NIST SP 800-53 baseline, is a property of an authorized system, not of a component. This directory describes how the relay helps a system meet those controls.
+
+[`component-definition.json`](component-definition.json) is an [OSCAL](https://pages.nist.gov/OSCAL/) 1.1.3 component definition that a system owner can import into a system security plan. Each control below says what the relay does, what the system owner is responsible for, and what proves it: tests by name, and [threat model](../THREAT_MODEL.md) mitigations, each of which names its own test.
+
+`go run ./internal/cmd/compliance` fails when a named test, mitigation or file does not exist, or when this file is out of date. CI also validates the definition against the OSCAL schema and every control against the NIST SP 800-53 Rev 5 catalog.
+
+| Control | Title |
+|---|---|
+{{- range .}}
+| [{{display .ID}}](#{{anchor .}}) | {{.Title}} |
+{{- end}}
+{{range .}}
+## {{display .ID}} {{.Title}}
+
+{{.Description}}
+{{- with .Remarks}}
+
+**Shared responsibility:** {{.}}
+{{- end}}
+{{- with .Tests}}
+
+**Tests:** {{range $i, $t := .}}{{if $i}}, {{end}}`{{$t}}`{{end}}
+{{- end}}
+{{- with .Mitigations}}
+
+**Mitigations:** {{range $i, $m := .}}{{if $i}}, {{end}}{{$m}}{{end}}
+{{- end}}
+{{- with .Files}}
+
+**Code:** {{range $i, $f := .}}{{if $i}}, {{end}}[`{{$f}}`]({{rel $f}}){{end}}
+{{- end}}
+{{end -}}

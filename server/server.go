@@ -36,8 +36,23 @@ type Introspector interface {
 type Tunnel struct {
 	ID       uint64
 	Subject  string
+	Session  string
+	TokenID  string
+	Source   netip.AddrPort
 	Target   netip.AddrPort
 	Protocol string
+}
+
+func (t *Tunnel) attrs() []slog.Attr {
+	return []slog.Attr{
+		slog.Uint64("tunnel", t.ID),
+		slog.String("sub", t.Subject),
+		slog.String("session", t.Session),
+		slog.String("token_id", t.TokenID),
+		slog.String("source", t.Source.String()),
+		slog.String("target", t.Target.String()),
+		slog.String("protocol", t.Protocol),
+	}
 }
 
 // Closed describes how a tunnel ended.
@@ -57,7 +72,7 @@ type Rejection struct {
 
 // Observer receives tunnel events. Implementations must be safe for concurrent use.
 type Observer interface {
-	TunnelOpened(ctx context.Context, t Tunnel)
+	TunnelOpened(ctx context.Context, t *Tunnel)
 	TunnelClosed(ctx context.Context, c *Closed)
 	TunnelRejected(ctx context.Context, r Rejection)
 }
@@ -127,7 +142,7 @@ type Server struct {
 
 type nopObserver struct{}
 
-func (nopObserver) TunnelOpened(context.Context, Tunnel)      {}
+func (nopObserver) TunnelOpened(context.Context, *Tunnel)     {}
 func (nopObserver) TunnelClosed(context.Context, *Closed)     {}
 func (nopObserver) TunnelRejected(context.Context, Rejection) {}
 

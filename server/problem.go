@@ -29,7 +29,15 @@ func algorithms() string {
 var challengeAlgs = `algs="` + algorithms() + `"`
 
 func (s *Server) reject(ctx context.Context, w http.ResponseWriter, r *http.Request, rej *rejection) {
-	attrs := []slog.Attr{slog.Int("status", rej.status), slog.String("reason", rej.reason)}
+	attrs := []slog.Attr{
+		slog.Int("status", rej.status),
+		slog.String("reason", rej.reason),
+		slog.String("source", r.RemoteAddr),
+		slog.String("authority", r.Host),
+	}
+	if token, _, crej := credentials(r.Header); crej == nil {
+		attrs = append(attrs, slog.String("token_id", TokenID(token)))
+	}
 	if rej.cause != nil {
 		attrs = append(attrs, slog.String("error", rej.cause.Error()))
 	}

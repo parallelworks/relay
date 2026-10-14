@@ -124,7 +124,7 @@ func TestTokenIDIsAHashPrefix(t *testing.T) {
 func TestNopObserver(t *testing.T) {
 	t.Parallel()
 	var o Observer = nopObserver{}
-	o.TunnelOpened(t.Context(), Tunnel{})
+	o.TunnelOpened(t.Context(), &Tunnel{})
 	o.TunnelClosed(t.Context(), &Closed{})
 	o.TunnelRejected(t.Context(), Rejection{})
 }

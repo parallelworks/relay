@@ -244,6 +244,7 @@ func (s *Server) relay(ctx context.Context, w http.ResponseWriter, r *http.Reque
 			s.cfg.Logger.LogAttrs(ctx, slog.LevelError, "tunnel.panic", slog.Uint64("tunnel", t.ID), slog.Any("recovered", recovered))
 		},
 	})
+	stop()
 	c := Closed{
 		Tunnel:     t,
 		Reason:     closeReason(err),

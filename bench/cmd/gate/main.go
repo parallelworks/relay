@@ -1,6 +1,8 @@
 // Command gate compares benchmark results and fails on a significant regression. It fails when a
 // benchmark is significantly worse than on the base branch by more than -max-regression, and when
-// CONNECT over HTTP/1.1 moves fewer bytes per second than the WebSocket baseline.
+// CONNECT over HTTP/1.1 moves fewer bytes per second than the WebSocket baseline. Significance is
+// judged across each family of comparisons with Holm's step-down procedure, so the chance that any
+// comparison fails by noise alone stays at alpha however many benchmarks there are.
 package main
 
 import (
@@ -108,7 +110,14 @@ func names[V any](m map[string]V) []string {
 	return keys
 }
 
+type measure struct {
+	name, unit string
+	lower      bool
+	cmp        comparison
+}
+
 func regressions(base, head samples, maxRegression float64) (report, failures []string) {
+	var ms []measure
 	for _, name := range names(head) {
 		for _, unit := range names(head[name]) {
 			lower, checked := lowerIsBetter[unit]
@@ -116,19 +125,22 @@ func regressions(base, head samples, maxRegression float64) (report, failures []
 			if !checked || len(prior) == 0 {
 				continue
 			}
-			cmp := compare(prior, head[name][unit])
-			worse := cmp.change
-			if !lower {
-				worse = -worse
-			}
-			verdict := "~"
-			if cmp.significant {
-				verdict = fmt.Sprintf("%+.1f%%", cmp.change*100)
-			}
-			report = append(report, fmt.Sprintf("%-60s %-10s %12.4g -> %12.4g  %s (p=%.3f)", name, unit, cmp.base, cmp.head, verdict, cmp.p))
-			if cmp.significant && (worse > maxRegression || (cmp.base == 0 && cmp.head > 0 && lower)) {
-				failures = append(failures, fmt.Sprintf("%s %s regressed %+.1f%%", name, unit, cmp.change*100))
-			}
+			ms = append(ms, measure{name: name, unit: unit, lower: lower, cmp: compare(prior, head[name][unit])})
+		}
+	}
+	judge(ms)
+	for _, m := range ms {
+		worse := m.cmp.change
+		if !m.lower {
+			worse = -worse
+		}
+		verdict := "~"
+		if m.cmp.significant {
+			verdict = fmt.Sprintf("%+.1f%%", m.cmp.change*100)
+		}
+		report = append(report, fmt.Sprintf("%-60s %-10s %12.4g -> %12.4g  %s (p=%.3f)", m.name, m.unit, m.cmp.base, m.cmp.head, verdict, m.cmp.p))
+		if m.cmp.significant && (worse > maxRegression || (m.cmp.base == 0 && m.cmp.head > 0 && m.lower)) {
+			failures = append(failures, fmt.Sprintf("%s %s regressed %+.1f%%", m.name, m.unit, m.cmp.change*100))
 		}
 	}
 	return report, failures
@@ -139,6 +151,24 @@ type comparison struct {
 	change      float64
 	p           float64
 	significant bool
+}
+
+// judge marks which comparisons are significant at alpha by Holm's step-down procedure: in order of
+// increasing p, the k-th smallest of m p-values must be at most alpha/(m-k+1), and testing stops at
+// the first that is not. Equal centers are never significant.
+func judge(ms []measure) {
+	order := make([]int, len(ms))
+	for i := range order {
+		order[i] = i
+	}
+	sort.SliceStable(order, func(a, b int) bool { return ms[order[a]].cmp.p < ms[order[b]].cmp.p })
+	for rank, i := range order {
+		c := &ms[i].cmp
+		if c.p > alpha/float64(len(ms)-rank) {
+			return
+		}
+		c.significant = c.base != c.head
+	}
 }
 
 func compare(base, head []float64) comparison {
@@ -152,13 +182,13 @@ func compare(base, head []float64) comparison {
 	if c.base != 0 {
 		c.change = (c.head - c.base) / c.base
 	}
-	c.significant = c.p < alpha && c.base != c.head
 	return c
 }
 
 // belowBaseline fails when CONNECT over HTTP/1.1 is significantly slower than the WebSocket tunnel
 // at the same number of tunnels.
 func belowBaseline(head samples) (report, failures []string) {
+	var ms []measure
 	for _, name := range names(head) {
 		if !strings.Contains(name, "transport=websocket") {
 			continue
@@ -168,10 +198,13 @@ func belowBaseline(head samples) (report, failures []string) {
 		if len(ws) == 0 || len(connect) == 0 {
 			continue
 		}
-		cmp := compare(ws, connect)
-		report = append(report, fmt.Sprintf("%-60s CONNECT/WebSocket throughput %.2fx (p=%.3f)", name, ratio(cmp), cmp.p))
-		if cmp.significant && cmp.head < cmp.base {
-			failures = append(failures, name+": CONNECT is slower than the WebSocket baseline")
+		ms = append(ms, measure{name: name, cmp: compare(ws, connect)})
+	}
+	judge(ms)
+	for _, m := range ms {
+		report = append(report, fmt.Sprintf("%-60s CONNECT/WebSocket throughput %.2fx (p=%.3f)", m.name, ratio(m.cmp), m.cmp.p))
+		if m.cmp.significant && m.cmp.head < m.cmp.base {
+			failures = append(failures, m.name+": CONNECT is slower than the WebSocket baseline")
 		}
 	}
 	return report, failures

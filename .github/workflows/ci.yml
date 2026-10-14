@@ -365,9 +365,9 @@ jobs:
       - name: Run base and head interleaved
         run: |
           for _ in $(seq 10); do
-            "$RUNNER_TEMP/head.test" -test.run '^$' -test.bench . -test.benchtime 1s -test.benchmem >> "$RUNNER_TEMP/head.txt"
+            "$RUNNER_TEMP/head.test" -test.run '^$' -test.bench . -test.benchtime 1s -test.benchmem -test.timeout 5m >> "$RUNNER_TEMP/head.txt"
             if [ -x "$RUNNER_TEMP/base.test" ]; then
-              "$RUNNER_TEMP/base.test" -test.run '^$' -test.bench . -test.benchtime 1s -test.benchmem >> "$RUNNER_TEMP/base.txt"
+              "$RUNNER_TEMP/base.test" -test.run '^$' -test.bench . -test.benchtime 1s -test.benchmem -test.timeout 5m >> "$RUNNER_TEMP/base.txt"
             fi
           done
       - name: Gate on regressions and the WebSocket baseline

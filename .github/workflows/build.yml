@@ -87,6 +87,12 @@ jobs:
         env:
           RELAY_VERSION: ${{ inputs.version }}
         run: ./scripts/build.sh dist
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        if: inputs.publish
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
         with:
           driver-opts: image=moby/buildkit:v0.34.0@sha256:b059f8d7226d0b326bc871af489a5dddf65e36af4d20d14251b072974d9ee87c
@@ -161,12 +167,6 @@ jobs:
         if: inputs.publish
         with:
           subject-checksums: dist/assets/checksums.txt
-      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        if: inputs.publish
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
       - name: Sign the image
         if: inputs.publish
         env:
@@ -197,6 +197,7 @@ jobs:
           out=$(helm push "dist/chart/relay-$VERSION.tgz" "$CHARTS" 2>&1)
           printf '%s\n' "$out"
           digest=$(printf '%s\n' "$out" | sed -n 's/^Digest: //p')
+          [ -n "$digest" ] || { echo "helm push printed no digest"; exit 1; }
           cosign sign --yes "${CHARTS#oci://}/relay@$digest"
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2

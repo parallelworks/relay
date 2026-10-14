@@ -3,6 +3,12 @@ name: Release
 on:
   push:
     branches: [canary]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Rebuild and publish the existing release vVERSION, for example 0.1.0.
+        required: true
+        type: string
 
 permissions: {}
 
@@ -13,6 +19,7 @@ concurrency:
 jobs:
   release-please:
     name: Release PR
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -38,7 +45,7 @@ jobs:
   build:
     name: Build
     needs: release-please
-    if: needs.release-please.outputs.created == 'true'
+    if: ${{ !cancelled() && (needs.release-please.outputs.created == 'true' || github.event_name == 'workflow_dispatch') }}
     permissions:
       contents: read
       id-token: write # keyless signing and attestations
@@ -46,14 +53,15 @@ jobs:
       packages: write # push the image and chart
     uses: $/.github/workflows/build.yml
     with:
-      ref: ${{ needs.release-please.outputs.tag }}
-      version: ${{ needs.release-please.outputs.version }}
+      ref: ${{ needs.release-please.outputs.tag || format('v{0}', inputs.version) }}
+      version: ${{ needs.release-please.outputs.version || inputs.version }}
       publish: true
       artifact: release
 
   publish:
     name: Publish
     needs: [release-please, build]
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -75,14 +83,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          TAG: ${{ needs.release-please.outputs.tag }}
+          TAG: ${{ needs.release-please.outputs.tag || format('v{0}', inputs.version) }}
         run: gh release upload "$TAG" --clobber dist/assets/* dist/sbom/* dist/chart/*
       - name: Record the FIPS module and the image
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          TAG: ${{ needs.release-please.outputs.tag }}
-          VERSION: ${{ needs.release-please.outputs.version }}
+          TAG: ${{ needs.release-please.outputs.tag || format('v{0}', inputs.version) }}
+          VERSION: ${{ needs.release-please.outputs.version || inputs.version }}
           DIGEST: ${{ needs.build.outputs.image-digest }}
         run: |
           {

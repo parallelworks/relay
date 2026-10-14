@@ -99,7 +99,7 @@ jobs:
             docker buildx build --provenance=false --sbom=false \
               --platform linux/amd64,linux/arm64 \
               --label "org.opencontainers.image.revision=$(git rev-parse HEAD)" \
-              --metadata-file "$RUNNER_TEMP/image.json" "$@" dist
+              --metadata-file "$RUNNER_TEMP/image.json" --file Dockerfile "$@" dist
           }
           build --output "type=oci,dest=dist/image.tar,rewrite-timestamp=true"
           if [ "$PUBLISH" = true ]; then

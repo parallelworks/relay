@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.1](https://github.com/parallelworks/relay/compare/v0.1.0...v0.1.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* **ci:** log in to the registry before pushing the release image ([#10](https://github.com/parallelworks/relay/issues/10)) ([c55f941](https://github.com/parallelworks/relay/commit/c55f9417c38a166f811a12ea1ed8b96819fdd717))
+* **ci:** releases include the signature bundle for checksums.txt ([#12](https://github.com/parallelworks/relay/issues/12)) ([6254503](https://github.com/parallelworks/relay/commit/62545033644fbfb75efa4f6bec9598e134fd92a1))
+* **ci:** republishing a release replaces its artifact notes instead of repeating them ([#13](https://github.com/parallelworks/relay/issues/13)) ([449be9d](https://github.com/parallelworks/relay/commit/449be9d6b856588b724fe0303d664e7ec482c51c))
+
 ## 0.1.0 (2026-10-14)
 
 

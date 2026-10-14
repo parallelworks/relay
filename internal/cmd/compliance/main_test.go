@@ -290,11 +290,13 @@ func TestCatalog(t *testing.T) {
 	}{
 		"missing": {catalog(t, func(k map[string]string) { delete(k, "sr-4") }), "sr-4: not in the catalog"},
 		"title":   {catalog(t, func(k map[string]string) { k["sr-4"] = "Origin" }), `sr-4: the catalog's title is "Origin"`},
-		"file":    {filepath.Join(t.TempDir(), "none.json"), "no such file"},
 	} {
 		if err := checkCatalog(tt.path, controls); err == nil || !strings.Contains(err.Error(), tt.want) {
 			t.Errorf("%s: err = %v, want %q", name, err, tt.want)
 		}
+	}
+	if err := checkCatalog(filepath.Join(t.TempDir(), "none.json"), controls); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("missing catalog: %v", err)
 	}
 	bad := filepath.Join(t.TempDir(), "bad.json")
 	if err := os.WriteFile(bad, []byte("{"), 0o600); err != nil {

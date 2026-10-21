@@ -2,7 +2,7 @@ module github.com/parallelworks/relay/integration
 
 go 1.27.0
 
-toolchain go1.27.2
+toolchain go1.27.3
 
 require (
 	github.com/parallelworks/relay v0.0.0

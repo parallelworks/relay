@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/parallelworks/relay/compare/v0.1.1...v0.1.2) (2026-10-21)
+
+
+### Bug Fixes
+
+* **deps:** build with Go 1.27.3, which distrusts eMudhra's compromised intermediate CAs ([#14](https://github.com/parallelworks/relay/issues/14)) ([db3fa56](https://github.com/parallelworks/relay/commit/db3fa56a4e0ff99297affd0b99c48ef0cd5b998b))
+
 ## [0.1.1](https://github.com/parallelworks/relay/compare/v0.1.0...v0.1.1) (2026-10-14)
 
 
